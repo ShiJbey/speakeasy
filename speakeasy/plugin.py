@@ -2,6 +2,7 @@ from typing import Any
 
 from neighborly.simulation import PluginInfo, Neighborly
 
+from speakeasy import VERSION
 import speakeasy.components
 import speakeasy.systems
 import speakeasy.social_rules
@@ -10,7 +11,7 @@ import speakeasy.social_rules
 plugin_info = PluginInfo(
     name="Speakeasy",
     plugin_id="external.speakeasy",
-    version="1.0.0"
+    version=VERSION
 )
 
 

@@ -1,0 +1,70 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "speakeasy"
+description = "A character-driven emergent narrative simulation of a 1920's Prohibition-era American town"
+authors = [
+    { name = "Jñani Crawford", email = "jscrawfo@ucsc.edu" },
+    { name = "Shi Johnson-Bey", email = "shijbey@ucsc.edu" },
+]
+readme = "README.md"
+dynamic = ["version"]
+requires-python = ">=3.8"
+keywords = [
+    "social simulation",
+    "prohibition",
+    "games",
+    "simulation",
+    "artificial intelligence",
+    "agent-based modeling",
+    "multiagent systems",
+    "emergent narrative"
+]
+classifiers = [
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Games/Entertainment :: Simulation",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Scientific/Engineering :: Artificial Life",
+    "Topic :: Sociology",
+    "Topic :: Software Development :: Libraries",
+]
+
+[project.optional-dependencies]
+development = [
+    "isort",
+    "black",
+    "black[d]",
+    "build",
+    "pytest",
+    "pytest-cov"
+]
+
+[project.urls]
+"Homepage" = "https://github.com/ShiJbey/speakeasy"
+"Bug Tracker" = "https://github.com/ShiJbey/speakeasy/issues"
+"Repository" = "https://github.com/ShiJBey/speakeasy.git"
+
+[tool.setuptools.dynamic]
+version = { attr = "speakeasy.VERSION" }
+
+[tool.setuptools]
+packages = ["speakeasy"]
+
+[tool.black]
+line-length = 88
+
+[tool.isort]
+profile = "black"
+default_section = "THIRDPARTY"
+known_first_party = "speakeasy"
+src_paths = ["speakeasy", "test", "."]
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+testpaths = ["tests"]
