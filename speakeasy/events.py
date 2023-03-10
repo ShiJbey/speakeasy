@@ -76,7 +76,7 @@ class LearnAboutEvent(ActionableLifeEvent):
 
     def get_priority(self) -> float:
         return 1
-    
+
     def get_effects(self):
         return {}
 
@@ -176,7 +176,7 @@ class TradeEvent(ActionableLifeEvent):
 
     def get_priority(self) -> float:
         return 1
-    
+
     def get_effects(self):
         initiator = self["Initiator"]
         other = self["Other"]
@@ -238,7 +238,7 @@ class TradeEvent(ActionableLifeEvent):
     def _bind_other(
         world: World, initiator: GameObject, candidate: Optional[GameObject] = None
     ) -> Optional[GameObject]:
-        
+
         respect_threshold = TRADE_EVENT_RESPECT_THRESHOLD
 
         if candidate:
@@ -262,7 +262,7 @@ class TradeEvent(ActionableLifeEvent):
 
             if characters_biz_owner is None:
                 continue
-            
+
             initiators_biz = initiator.get_component(BusinessOwner).business
             characters_biz = characters_biz_owner.business
 
@@ -276,7 +276,7 @@ class TradeEvent(ActionableLifeEvent):
 
             #Prereq: mutual respect
             outgoing_relationship = get_relationship(initiator, character)
-            
+
             if not has_relationship(character, initiator):
                 continue
             incoming_relationship = get_relationship(character, initiator)
@@ -324,7 +324,7 @@ class GoodWordEvent(ActionableLifeEvent):
 
     def get_priority(self) -> float:
         return 1
-    
+
     def get_effects(self):
         initiator = self["Initiator"]
         other = self["Other"]
@@ -367,7 +367,7 @@ class GoodWordEvent(ActionableLifeEvent):
     def _bind_subject(
         world: World, initiator: GameObject, candidate: Optional[GameObject] = None
     ) -> Optional[GameObject]:
-        
+
         respect_threshold = GOOD_WORD_EVENT_RESPECT_THRESHOLD
 
         if candidate:
@@ -388,17 +388,17 @@ class GoodWordEvent(ActionableLifeEvent):
             respect = get_relationship(initiator, character).get_component(Relationship).get_component(Respect)
             if respect.get_value() >= respect_threshold:
                 matches.append(character)
-        
+
         if matches:
             return world.get_resource(random.Random).choice(matches)
 
-        return None 
+        return None
 
     @staticmethod
     def _bind_other(
         world: World, initiator: GameObject, candidate: Optional[GameObject] = None
     ) -> Optional[GameObject]:
-        
+
         respect_threshold = GOOD_WORD_EVENT_RESPECT_THRESHOLD
 
         if candidate:
@@ -421,10 +421,10 @@ class GoodWordEvent(ActionableLifeEvent):
             respect = get_relationship(character, initiator).get_component(Relationship).get_component(Respect)
             if respect >= respect_threshold:
                 matches.append(character)
-        
+
         if matches:
             return world.get_resource(random.Random).choice(matches)
-        
+
         return None
 
     @classmethod
@@ -443,14 +443,14 @@ class GoodWordEvent(ActionableLifeEvent):
 
         if subject is None:
             return None
-        
+
         other = cls._bind_other(world, initiator, bindings.get("Other"))
 
         if other is None:
             return None
 
         return cls(world.get_resource(SimDateTime), initiator, other, subject)
-    
+
 class TellAboutEvent(ActionableLifeEvent):
 
     initiator = "Initiator"
@@ -462,7 +462,7 @@ class TellAboutEvent(ActionableLifeEvent):
 
     def get_priority(self) -> float:
         return 1
-    
+
     def get_effects(self):
         initiator = self["Initiator"]
         other = self["Other"]
@@ -510,7 +510,7 @@ class TellAboutEvent(ActionableLifeEvent):
     def _bind_other(
         world: World, initiator: GameObject, candidate: Optional[GameObject] = None
     ) -> Optional[GameObject]:
-        
+
         respect_threshold = TELL_ABOUT_EVENT_RESPECT_THRESHOLD
 
         if candidate:
@@ -533,10 +533,10 @@ class TellAboutEvent(ActionableLifeEvent):
             respect = get_relationship(initiator, character).get_component(Respect)
             if respect.get_value() >= respect_threshold:
                 matches.append(character)
-        
+
         if matches:
             return world.get_resource(random.Random).choice(matches)
-        
+
         return None
 
     @staticmethod
@@ -550,7 +550,7 @@ class TellAboutEvent(ActionableLifeEvent):
             subjects_bizown = candidate.get_component(BusinessOwner)
             if not subjects_bizown:
                 return None
-            
+
             subject_biz = subjects_bizown.business
 
             if has_knowledge(initiators_knowledge, subject_biz) and not has_knowledge(others_knowledge, subject_biz):
@@ -572,16 +572,16 @@ class TellAboutEvent(ActionableLifeEvent):
             subjects_bizown = candidate.get_component(BusinessOwner)
             if not subjects_bizown:
                 return None
-            
+
             subject_biz = subjects_bizown.business
 
             if has_knowledge(initiators_knowledge, subject_biz) and not has_knowledge(others_knowledge, subject_biz):
                 matches.append(character)
-        
+
         if matches:
             return world.get_resource(random.Random).choice(matches)
 
-        return None 
+        return None
 
     @classmethod
     def instantiate(
@@ -599,7 +599,7 @@ class TellAboutEvent(ActionableLifeEvent):
 
         if other is None:
             return None
-        
+
         subject = cls._bind_subject(world, initiator, other, bindings.get("Subject"))
 
         if subject is None:
