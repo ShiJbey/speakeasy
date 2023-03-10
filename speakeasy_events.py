@@ -97,10 +97,7 @@ class LearnAboutEvent(ActionableLifeEvent):
         if candidate:
             candidates = [candidate]
         else:
-            candidates = [
-                world.get_gameobject(result[0])
-                for result in world.get_components((GameCharacter, Active, Knowledge))
-            ]
+            return None #prevents this from being initiated randomly
 
         if candidates:
             return world.get_resource(random.Random).choice(candidates)
