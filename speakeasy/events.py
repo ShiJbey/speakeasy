@@ -17,24 +17,21 @@ from neighborly.utils.relationships import (
     get_relationship,
     has_relationship,
 )
+from neighborly.content_management import (
+    LifeEventLibrary
+)
+from neighborly.simulation import Neighborly, PluginInfo
 
 ############
 # TODO: remove placeholders for new stuff
-class Respect(RelationshipFacet):
-    pass
-class Favor(RelationshipFacet):
-    pass
-from neighborly.core.ecs import Component
-class Inventory(Component):
-    pass
-class Knowledge(Component):
-    pass
 TRADE_EVENT_RESPECT_THRESHOLD = 1
 GOOD_WORD_EVENT_RESPECT_THRESHOLD = 2
 TELL_ABOUT_EVENT_RESPECT_THRESHOLD = 1
 THEFT_EVENT_RESPECT_THRESHOLD = -5
 HELP_EVENT_RESPECT_THRESHOLD = 5
 #############
+
+from speakeasy.components import Inventory, Knowledge, Respect, Favors
 
 # Classes for the different effects map entries
 class GainItemEffect:
@@ -333,7 +330,7 @@ class GoodWordEvent(ActionableLifeEvent):
         subject = self["Subject"]
 
         return {
-            Role("Initiator", initiator) : [LoseRelationshipEffect(get_relationship(initiator, subject), Favor)],
+            Role("Initiator", initiator) : [LoseRelationshipEffect(get_relationship(initiator, subject), Favors)],
             Role("Subject", subject) : [GainRelationshipEffect(get_relationship(other, subject), Respect)]
         }
 
@@ -346,7 +343,7 @@ class GoodWordEvent(ActionableLifeEvent):
         get_relationship(other, subject).get_component(Relationship).add_modifier(RelationshipModifier('Gained respect due to good word.', {Respect:1}))
 
         #remove some favor
-        get_relationship(initiator, subject).get_component(Relationship).add_modifier(RelationshipModifier('Used up favor by putting in a good word.', {Favor:-1}))
+        get_relationship(initiator, subject).get_component(Relationship).add_modifier(RelationshipModifier('Used up favor by putting in a good word.', {Favors:-1}))
 
     @staticmethod
     def _bind_initiator(
@@ -858,7 +855,7 @@ class HelpWithRivalGangEvent(ActionableLifeEvent):
         other = self["Other"]
 
         return {
-            Role("Initiator", initiator) : [GainRelationshipEffect(get_relationship(other, initiator), Favor), GainRelationshipEffect(get_relationship(other, initiator), Respect)]
+            Role("Initiator", initiator) : [GainRelationshipEffect(get_relationship(other, initiator), Favors), GainRelationshipEffect(get_relationship(other, initiator), Respect)]
         }
 
     def execute(self) -> None:
@@ -869,7 +866,7 @@ class HelpWithRivalGangEvent(ActionableLifeEvent):
         get_relationship(other, initiator).get_component(Relationship).add_modifier(RelationshipModifier('Gained respect due to help witha  rival gang.', {Respect:1}))
 
         #add a favor
-        get_relationship(other, initiator).get_component(Relationship).add_modifier(RelationshipModifier('Owe a favor due to getting help with a rival gang.', {Favor:1}))
+        get_relationship(other, initiator).get_component(Relationship).add_modifier(RelationshipModifier('Owe a Favors due to getting help with a rival gang.', {Favors:1}))
 
 
     @staticmethod
@@ -955,3 +952,21 @@ class HelpWithRivalGangEvent(ActionableLifeEvent):
             return None
 
         return cls(world.get_resource(SimDateTime), initiator, other, item)
+
+plugin_info = PluginInfo(
+    name="speakeasy events plugin",
+    plugin_id="speakeasy.life-events",
+    version="0.1.0",
+)
+
+def setup(sim: Neighborly, **kwargs: Any):
+    life_event_library = sim.world.get_resource(LifeEventLibrary)
+
+    life_event_library.add(TradeEvent)
+    life_event_library.add(GoodWordEvent)
+    life_event_library.add(TheftEvent)
+    life_event_library.add(HelpWithRivalGangEvent)
+    life_event_library.add(GiveEvent)
+    life_event_library.add(ExtortBusinessEvent)
+    life_event_library.add(TellAboutEvent)
+    life_event_library.add(LearnAboutEvent)
