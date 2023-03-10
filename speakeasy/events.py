@@ -32,6 +32,8 @@ class Knowledge(Component):
 TRADE_EVENT_RESPECT_THRESHOLD = 1
 GOOD_WORD_EVENT_RESPECT_THRESHOLD = 2
 TELL_ABOUT_EVENT_RESPECT_THRESHOLD = 1
+THEFT_EVENT_RESPECT_THRESHOLD = -5
+HELP_EVENT_RESPECT_THRESHOLD = 5
 #############
 
 # Classes for the different effects map entries
@@ -372,6 +374,13 @@ class GoodWordEvent(ActionableLifeEvent):
 
         if candidate:
             if has_relationship(initiator, candidate):
+
+                outgoing_relationship = get_relationship(initiator, candidate)
+                outgoing_respect = outgoing_relationship.get_component(Respect).get_value()
+
+                if outgoing_respect < GOOD_WORD_EVENT_RESPECT_THRESHOLD:
+                    return None
+
                 candidates = [candidate]
             else:
                 return None
@@ -606,3 +615,343 @@ class TellAboutEvent(ActionableLifeEvent):
             return None
 
         return cls(world.get_resource(SimDateTime), initiator, other, subject)
+
+class TheftEvent(ActionableLifeEvent):
+
+    initiator = "Initiator"
+
+    def __init__(
+        self, date: SimDateTime, initiator: GameObject, other: GameObject
+    ) -> None:
+        super().__init__(date, [Role("Initiator", initiator), Role("Other", other)])
+
+    def get_priority(self) -> float:
+        return 1
+
+    def get_effects(self):
+        initiator = self["Initiator"]
+        other = self["Other"]
+
+        others_item = other.get_component(BusinessOwner).business.produces()[0]
+
+        return {
+            Role("Initiator", initiator) : [GainItemEffect(others_item), LoseRelationshipEffect(get_relationship(other, initiator), Respect)]
+        }
+
+    def execute(self) -> None:
+        initiator = self["Initiator"]
+        other = self["Other"]
+
+        #move item between inventories
+        initiators_inventory = initiator.get_component(Inventory)
+        others_inventory = other.get_component(Inventory)
+        others_biz = other.get_component(BusinessOwner).business
+        others_item = others_biz.produces()[0]
+
+        others_inventory.remove(others_item)
+        initiators_inventory.add(others_item)
+
+        #lose some respect
+        get_relationship(initiator, other).get_component(Relationship).add_modifier(RelationshipModifier('Lost respect due to theft.', {Respect:-3}))
+
+    @staticmethod
+    def _bind_initiator(
+        world: World, candidate: Optional[GameObject] = None
+    ) -> Optional[GameObject]:
+        if candidate:
+            candidates = [candidate]
+        else:
+            candidates = [
+                world.get_gameobject(result[0])
+                for result in world.get_components((GameCharacter, Active, Knowledge))
+            ]
+
+        if candidates:
+            return world.get_resource(random.Random).choice(candidates)
+
+        return None
+
+    @staticmethod
+    def _bind_other(
+        world: World, initiator: GameObject, candidate: Optional[GameObject] = None
+    ) -> Optional[GameObject]:
+
+        respect_threshold = THEFT_EVENT_RESPECT_THRESHOLD
+
+        if candidate:
+            if has_relationship(initiator, candidate):
+                initiators_knowledge = initiator.get_component(Knowledge)
+                outgoing_relationship = get_relationship(initiator, character)
+                outgoing_respect = outgoing_relationship.get_component(Respect)
+
+                characters_biz_owner = character.get_component(BusinessOwner)
+                if characters_biz_owner is None:
+                    return None
+                
+                characters_biz = characters_biz_owner.business
+
+                if has_knowledge(initiators_knowledge, characters_biz) and outgoing_respect.get_value() <= respect_threshold:
+                    candidates = [candidate]
+            
+            return None
+        else:
+            candidates = [
+                world.get_gameobject(c)
+                for c in initiator.get_component(RelationshipManager).targets()
+            ]
+
+        matches: List[GameObject] = []
+
+        for character in candidates:
+            #Prereq: other owns biz
+            characters_biz_owner = character.get_component(BusinessOwner)
+
+            if characters_biz_owner is None:
+                continue
+
+            characters_biz = characters_biz_owner.business
+
+            #Prereq: initiator knowledge of biz
+            initiators_knowledge = initiator.get_component(Knowledge)
+            if not has_knowledge(initiators_knowledge, characters_biz):
+              continue
+
+            #Prereq: negative respect
+            outgoing_relationship = get_relationship(initiator, character)
+            outgoing_respect = outgoing_relationship.get_component(Respect)
+
+            if outgoing_respect.get_value() <= respect_threshold:
+                matches.append(character)
+
+        if matches:
+            return world.get_resource(random.Random).choice(matches)
+
+        return None
+
+    @classmethod
+    def instantiate(
+        cls,
+        world: World,
+        bindings: RoleList,
+    ) -> Optional[ActionableLifeEvent]:
+
+        initiator = cls._bind_initiator(world, bindings.get("Initiator"))
+
+        if initiator is None:
+            return None
+
+        other = cls._bind_other(world, initiator, bindings.get("Other"))
+
+        if other is None:
+            return None
+
+        return cls(world.get_resource(SimDateTime), initiator, other)
+
+class ExtortBusinessEvent(TheftEvent):
+    pass
+
+class GiveEvent(ActionableLifeEvent):
+
+    initiator = "Initiator"
+
+    def __init__(
+        self, date: SimDateTime, initiator: GameObject, other: GameObject, item: GameObject
+    ) -> None:
+        super().__init__(date, [Role("Initiator", initiator), Role("Other", other), Role("Item", item)])
+
+    def get_priority(self) -> float:
+        return 1
+
+    def get_effects(self):
+        initiator = self["Initiator"]
+        other = self["Other"]
+        item = self["Item"]
+
+        return {
+            Role("Initiator", initiator) : [LoseItemEffect(item)],
+            Role("Other", other)  : [GainItemEffect(item)]
+        }
+
+    def execute(self) -> None:
+        initiator = self["Initiator"]
+        other = self["Other"]
+        item = self["Item"]
+
+        #move item between inventories
+        initiators_inventory = initiator.get_component(Inventory)
+        others_inventory = other.get_component(Inventory)
+
+        others_inventory.remove(item)
+        initiators_inventory.add(item)
+
+
+    @staticmethod
+    def _bind_initiator(
+        world: World, candidate: Optional[GameObject] = None
+    ) -> Optional[GameObject]:
+        if candidate:
+            candidates = [candidate]
+            return world.get_resource(random.Random).choice(candidates)
+        else:
+            return None
+
+    @staticmethod
+    def _bind_other(
+        world: World, initiator: GameObject, candidate: Optional[GameObject] = None
+    ) -> Optional[GameObject]:
+        
+        if candidate and candidate != initiator:
+            candidates = [candidate]
+            return world.get_resource(random.Random).choice(candidates)
+        else:
+            return None
+    
+    def _bind_item(
+        world: World, initiator: Optional[GameObject] = None, other: Optional[GameObject] = None
+    ) -> Optional[GameObject]:
+        
+        if initiator and other:
+            initiator_inventory = initiator.get_component(Inventory)
+            candidates = initiator_inventory.items()
+            return world.get_resource(random.Random).choice(candidates)
+        else:
+            return None
+
+    @classmethod
+    def instantiate(
+        cls,
+        world: World,
+        bindings: RoleList,
+    ) -> Optional[ActionableLifeEvent]:
+
+        initiator = cls._bind_initiator(world, bindings.get("Initiator"))
+
+        if initiator is None:
+            return None
+
+        other = cls._bind_other(world, initiator, bindings.get("Other"))
+
+        if other is None:
+            return None
+        
+        item = cls._bind_item(world, initiator, other)
+
+        if item is None:
+            return None
+
+        return cls(world.get_resource(SimDateTime), initiator, other, item)
+    
+class HelpWithRivalGangEvent(ActionableLifeEvent):
+
+    initiator = "Initiator"
+
+    def __init__(
+        self, date: SimDateTime, initiator: GameObject, other: GameObject, item: GameObject
+    ) -> None:
+        super().__init__(date, [Role("Initiator", initiator), Role("Other", other)])
+
+    def get_priority(self) -> float:
+        return 1
+
+    def get_effects(self):
+        initiator = self["Initiator"]
+        other = self["Other"]
+
+        return {
+            Role("Initiator", initiator) : [GainRelationshipEffect(get_relationship(other, initiator), Favor), GainRelationshipEffect(get_relationship(other, initiator), Respect)]
+        }
+
+    def execute(self) -> None:
+        initiator = self["Initiator"]
+        other = self["Other"]
+
+        #add some respect
+        get_relationship(other, initiator).get_component(Relationship).add_modifier(RelationshipModifier('Gained respect due to help witha  rival gang.', {Respect:1}))
+
+        #add a favor
+        get_relationship(other, initiator).get_component(Relationship).add_modifier(RelationshipModifier('Owe a favor due to getting help with a rival gang.', {Favor:1}))
+
+
+    @staticmethod
+    def _bind_initiator(
+        world: World, candidate: Optional[GameObject] = None
+    ) -> Optional[GameObject]:
+        if candidate:
+            candidates = [candidate]
+            return world.get_resource(random.Random).choice(candidates)
+        else:
+            candidates = [world.get_gameobject(c[0]) for c in world.get_components((GameCharacter, Active))]
+            return world.get_resource(random.Random).choice(candidates)
+
+    @staticmethod
+    def _bind_other(
+        world: World, initiator: GameObject, candidate: Optional[GameObject] = None
+    ) -> Optional[GameObject]:
+        
+        respect_threshold = HELP_EVENT_RESPECT_THRESHOLD
+        
+        if candidate and has_relationship(initiator, candidate):
+            candidates = [candidate]
+
+            outgoing_relationship = get_relationship(initiator, candidate)
+            outgoing_respect = outgoing_relationship.get_component(Respect).get_value()
+
+            if outgoing_respect < HELP_EVENT_RESPECT_THRESHOLD:
+                return None
+            
+            return world.get_resource(random.Random).choice(candidates)
+        else:
+            candidates = [
+                world.get_gameobject(c)
+                for c in initiator.get_component(RelationshipManager).targets()
+            ]
+
+        matches: List[GameObject] = []
+
+        for character in candidates:
+            #prereq: initiator must respect other
+            respect = get_relationship(initiator, character).get_component(Respect)
+            if respect.get_value() >= respect_threshold:
+                matches.append(character)
+
+        if matches:
+            return world.get_resource(random.Random).choice(matches)
+
+        return None
+
+
+    
+    def _bind_item(
+        world: World, initiator: Optional[GameObject] = None, other: Optional[GameObject] = None
+    ) -> Optional[GameObject]:
+        
+        if initiator and other:
+            initiator_inventory = initiator.get_component(Inventory)
+            candidates = initiator_inventory.items()
+            return world.get_resource(random.Random).choice(candidates)
+        else:
+            return None
+
+    @classmethod
+    def instantiate(
+        cls,
+        world: World,
+        bindings: RoleList,
+    ) -> Optional[ActionableLifeEvent]:
+
+        initiator = cls._bind_initiator(world, bindings.get("Initiator"))
+
+        if initiator is None:
+            return None
+
+        other = cls._bind_other(world, initiator, bindings.get("Other"))
+
+        if other is None:
+            return None
+        
+        item = cls._bind_item(world, initiator, other)
+
+        if item is None:
+            return None
+
+        return cls(world.get_resource(SimDateTime), initiator, other, item)
