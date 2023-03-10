@@ -1,1 +1,12 @@
-neighborly >= 0.10.0
+esper==2.4.1
+neighborly @ git+https://github.com/ShiJbey/neighborly.git@8a601a1e9e64b1a4c8397de07aac61e6391d2f8f
+numpy==1.24.2
+ordered-set==4.1.0
+pandas==1.5.3
+pydantic==1.10.6
+python-dateutil==2.8.2
+pytz==2022.7.1
+PyYAML==6.0
+six==1.16.0
+tracery==0.1.1
+typing_extensions==4.5.0
