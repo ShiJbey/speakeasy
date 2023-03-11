@@ -1,0 +1,8 @@
+- name: Farmer
+  level: 2
+- name: Brewer
+  level: 2
+- name: Bartender
+  level: 2
+- name: Owner
+  level: 4

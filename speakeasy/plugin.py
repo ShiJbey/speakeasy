@@ -1,6 +1,9 @@
+import os
+import pathlib
 from typing import Any
 
 from neighborly.simulation import PluginInfo, Neighborly
+from neighborly.loaders import load_character_prefab, load_business_prefab, load_data_file, load_occupation_types
 
 from speakeasy import VERSION
 import speakeasy.components
@@ -8,6 +11,7 @@ import speakeasy.systems
 import speakeasy.social_rules
 import speakeasy.events
 
+_RESOURCES_DIR = pathlib.Path(os.path.abspath(__file__)).parent / "data"
 
 plugin_info = PluginInfo(
     name="Speakeasy",
@@ -42,4 +46,14 @@ def setup(sim: Neighborly, **kwargs: Any) -> None:
     sim.add_social_rule(speakeasy.social_rules.friendship_virtue_compatibility)
 
     #add events
-    speakeasy.events.setup(sim, kwargs)
+    speakeasy.events.setup(sim)
+
+    #load prefabs
+    load_character_prefab(sim.world, _RESOURCES_DIR / "character.default.with-inventory.yaml")
+    load_character_prefab(sim.world, _RESOURCES_DIR / "character.default.male.yaml")
+    load_character_prefab(sim.world, _RESOURCES_DIR / "character.default.female.yaml")
+
+    load_business_prefab(sim.world, _RESOURCES_DIR / "business.default.with-produces.yaml")
+    load_data_file(sim, _RESOURCES_DIR / "businesses.yaml")
+    load_occupation_types(sim.world, _RESOURCES_DIR / "occupation_types.yaml")
+    
