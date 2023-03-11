@@ -31,7 +31,7 @@ THEFT_EVENT_RESPECT_THRESHOLD = -5
 HELP_EVENT_RESPECT_THRESHOLD = 5
 #############
 
-from speakeasy.components import Inventory, Knowledge, Respect, Favors
+from speakeasy.components import Inventory, Knowledge, Respect, Favors, Produces
 
 # Classes for the different effects map entries
 class GainItemEffect:
@@ -58,7 +58,9 @@ class GainKnowledgeEffect:
 
 # utility fucntion
 def needs_item_from(a: Business, b: Business):
-    return True in [i in b.produces() for i in a.requires()]
+    pro_a = a.gameobject.get_component(Produces)
+    pro_b = b.gameobject.get_component(Produces)
+    return True in [i in pro_b.produces for i in pro_a.requires]
 
 def has_knowledge(a: Knowledge, b: Business):
     return True in [b in i for i in list(a.produces.values())]
@@ -86,8 +88,8 @@ class LearnAboutEvent(ActionableLifeEvent):
         #add the knowledge
         initiators_knowledge = initiator.get_component(Knowledge)
         others_biz = other.get_component(BusinessOwner).others_biz_own.business
-        others_item = others_biz.produces()[0]
-        initiators_knowledge.produces()[others_item].append(others_biz)
+        others_item = others_biz.produces[0]
+        initiators_knowledge.produces[others_item].append(others_biz)
 
     @staticmethod
     def _bind_initiator(
@@ -115,9 +117,9 @@ class LearnAboutEvent(ActionableLifeEvent):
 
             initiator_knowledge = initiator.get_component(Knowledge)
             candidate_biz = candidate_bizown.business
-            candidate_item = candidate_biz.produces()[0]
+            candidate_item = candidate_biz.produces[0]
 
-            if candidate_biz not in initiator_knowledge.produces()[candidate_item]:
+            if candidate_biz not in initiator_knowledge.produces[candidate_item]:
                 candidates = [candidate]
             else:
                 return None
@@ -134,9 +136,9 @@ class LearnAboutEvent(ActionableLifeEvent):
             candidate_bizown = character.get_component(BusinessOwner)
             initiator_knowledge = initiator.get_component(Knowledge)
             candidate_biz = candidate_bizown.business
-            candidate_item = candidate_biz.produces()[0]
+            candidate_item = candidate_biz.produces[0]
 
-            if candidate_biz not in initiator_knowledge.produces()[candidate_item]:
+            if candidate_biz not in initiator_knowledge.produces[candidate_item]:
                 matches.append(character)
 
         if matches:
@@ -180,8 +182,8 @@ class TradeEvent(ActionableLifeEvent):
         initiator = self["Initiator"]
         other = self["Other"]
 
-        initiators_item = initiator.get_component(BusinessOwner).business.produces()[0]
-        others_item = other.get_component(BusinessOwner).business.produces()[0]
+        initiators_item = initiator.get_component(BusinessOwner).business.produces[0]
+        others_item = other.get_component(BusinessOwner).business.produces[0]
 
         return {
             Role("Initiator", initiator) : [GainItemEffect(others_item), LoseItemEffect(initiators_item), GainRelationshipEffect(get_relationship(other, initiator), Respect)],
@@ -197,8 +199,8 @@ class TradeEvent(ActionableLifeEvent):
         others_inventory = other.get_component(Inventory)
         initiators_biz = initiator.get_component(BusinessOwner).business
         others_biz = other.get_component(BusinessOwner).business
-        initiators_item = initiators_biz.produces()[0]
-        others_item = others_biz.produces()[0]
+        initiators_item = initiators_biz.produces[0]
+        others_item = others_biz.produces[0]
 
         others_inventory.remove(others_item)
         initiators_inventory.add(others_item)
@@ -210,7 +212,7 @@ class TradeEvent(ActionableLifeEvent):
         get_relationship(other, initiator).get_component(Relationship).add_modifier(RelationshipModifier('Gained respect due to trade.', {Respect:1}))
 
         #trigger a learning event
-        if initiators_biz not in other.get_component(Knowledge).produces()[initiators_item]:
+        if initiators_biz not in other.get_component(Knowledge).produces[initiators_item]:
           world = initiator.world
           learning_event = LearnAboutEvent(world.get_resource(SimDateTime), other, initiator)
           world.get_resource(LifeEventBuffer).append(learning_event)
@@ -257,20 +259,22 @@ class TradeEvent(ActionableLifeEvent):
 
         for character in candidates:
             #Prereq: initiator need
-            characters_biz_owner = character.get_component(BusinessOwner)
-
-            if characters_biz_owner is None:
+            if not character.has_component(BusinessOwner):
                 continue
 
-            initiators_biz = initiator.get_component(BusinessOwner).business
-            characters_biz = characters_biz_owner.business
+            characters_biz_owner = character.get_component(BusinessOwner)
+
+            initiators_biz = world.get_gameobject(initiator.get_component(BusinessOwner).business).get_component(Business)
+            characters_biz = world.get_gameobject(characters_biz_owner.business).get_component(Business)
 
             if not needs_item_from(initiators_biz, characters_biz):
               continue
 
             #Prereq: initiator knowledge
             initiators_knowledge = initiator.get_component(Knowledge)
-            if not characters_biz in initiators_knowledge.produces[initiators_biz.requires()[0]]:
+            initiators_biz_prod = world.get_gameobject(initiator.get_component(BusinessOwner).business).get_component(Produces)
+            initiators_need = initiators_biz_prod.requires[0]
+            if not initiators_need in initiators_knowledge.produces or not characters_biz in initiators_knowledge.produces[initiators_need]:
               continue
 
             #Prereq: mutual respect
@@ -391,7 +395,7 @@ class GoodWordEvent(ActionableLifeEvent):
 
         for character in candidates:
             #prereq: initiator must respect subject
-            respect = get_relationship(initiator, character).get_component(Relationship).get_component(Respect)
+            respect = get_relationship(initiator, character).get_component(Respect)
             if respect.get_value() >= respect_threshold:
                 matches.append(character)
 
@@ -424,7 +428,7 @@ class GoodWordEvent(ActionableLifeEvent):
 
         for character in candidates:
             #prereq: other must respect initiator
-            respect = get_relationship(character, initiator).get_component(Relationship).get_component(Respect)
+            respect = get_relationship(character, initiator).get_component(Respect).get_value()
             if respect >= respect_threshold:
                 matches.append(character)
 
@@ -474,7 +478,7 @@ class TellAboutEvent(ActionableLifeEvent):
         other = self["Other"]
         subject = self["Subject"]
 
-        subjects_item = subject.get_component(BusinessOwner).business.produces()[0]
+        subjects_item = subject.get_component(BusinessOwner).business.produces[0]
 
         return {
             Role("Initiator", initiator) : [GainRelationshipEffect(get_relationship(other, initiator), Respect)],
@@ -487,10 +491,10 @@ class TellAboutEvent(ActionableLifeEvent):
         subject = self["Subject"]
 
         subjects_business = subject.get_component(BusinessOwner).business
-        subjects_item = subjects_business.produces()[0]
+        subjects_item = subjects_business.produces[0]
 
         #add some knowledge
-        other.get_component(Knowledge).produces()[subjects_item].append(subjects_business)
+        other.get_component(Knowledge).produces[subjects_item].append(subjects_business)
 
         #add some respect
         get_relationship(initiator, subject).get_component(Relationship).add_modifier(RelationshipModifier('Gained respect due to getting information.', {Respect:1}))
@@ -557,7 +561,7 @@ class TellAboutEvent(ActionableLifeEvent):
             if not subjects_bizown:
                 return None
 
-            subject_biz = subjects_bizown.business
+            subject_biz = world.get_gameobject(subjects_bizown.business).get_component(Business)
 
             if has_knowledge(initiators_knowledge, subject_biz) and not has_knowledge(others_knowledge, subject_biz):
                 candidates = [candidate]
@@ -566,7 +570,7 @@ class TellAboutEvent(ActionableLifeEvent):
         else:
             candidates = []
             initiators_knowledge = initiator.get_component(Knowledge)
-            for entry in list(initiators_knowledge.produces().values()):
+            for entry in list(initiators_knowledge.produces.values()):
                 candidates.extend(entry)
 
         matches: List[GameObject] = []
@@ -579,7 +583,7 @@ class TellAboutEvent(ActionableLifeEvent):
             if not subjects_bizown:
                 return None
 
-            subject_biz = subjects_bizown.business
+            subject_biz = world.get_gameobject(subjects_bizown.business).get_component(Business)
 
             if has_knowledge(initiators_knowledge, subject_biz) and not has_knowledge(others_knowledge, subject_biz):
                 matches.append(character)
@@ -629,7 +633,7 @@ class TheftEvent(ActionableLifeEvent):
         initiator = self["Initiator"]
         other = self["Other"]
 
-        others_item = other.get_component(BusinessOwner).business.produces()[0]
+        others_item = other.get_component(BusinessOwner).business.produces[0]
 
         return {
             Role("Initiator", initiator) : [GainItemEffect(others_item), LoseRelationshipEffect(get_relationship(other, initiator), Respect)]
@@ -643,7 +647,7 @@ class TheftEvent(ActionableLifeEvent):
         initiators_inventory = initiator.get_component(Inventory)
         others_inventory = other.get_component(Inventory)
         others_biz = other.get_component(BusinessOwner).business
-        others_item = others_biz.produces()[0]
+        others_item = others_biz.produces[0]
 
         others_inventory.remove(others_item)
         initiators_inventory.add(others_item)
@@ -685,7 +689,7 @@ class TheftEvent(ActionableLifeEvent):
                 if characters_biz_owner is None:
                     return None
                 
-                characters_biz = characters_biz_owner.business
+                characters_biz = world.get_gameobject(characters_biz_owner.business).get_component(Business)
 
                 if has_knowledge(initiators_knowledge, characters_biz) and outgoing_respect.get_value() <= respect_threshold:
                     candidates = [candidate]
@@ -701,12 +705,12 @@ class TheftEvent(ActionableLifeEvent):
 
         for character in candidates:
             #Prereq: other owns biz
+            if not character.has_component(BusinessOwner):
+                continue
+            
             characters_biz_owner = character.get_component(BusinessOwner)
 
-            if characters_biz_owner is None:
-                continue
-
-            characters_biz = characters_biz_owner.business
+            characters_biz = world.get_gameobject(characters_biz_owner.business).get_component(Business)
 
             #Prereq: initiator knowledge of biz
             initiators_knowledge = initiator.get_component(Knowledge)
