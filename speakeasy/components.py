@@ -186,6 +186,11 @@ class Favors(Component):
         super().__init__()
         self.favors = favors
 
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "favors": self.favors
+        }
+
 
 class Produces(Component):
     """
@@ -303,6 +308,12 @@ class Knowledge(Component):
         if item not in self.buys:
             return
         self.buys[item].remove(buyer)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "buyers": {**self.buys},
+            "produces": {**self.produces}
+        }
 
 
 class Respect(RelationshipFacet):
