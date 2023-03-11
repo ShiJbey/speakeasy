@@ -186,6 +186,17 @@ class Favors(Component):
         super().__init__()
         self.favors = favors
 
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "favors": self.favors
+        }
+
+    def __str__(self) -> str:
+        return self.favors.__str__()
+
+    def __repr__(self) -> str:
+        return f"Favors({self.favors})"
+
 
 class Produces(Component):
     """

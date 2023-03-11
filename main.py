@@ -37,6 +37,7 @@ sim = Neighborly(
                 "neighborly.plugins.defaults.residences",
                 "neighborly.plugins.defaults.ai",
                 "neighborly.plugins.defaults.location_bias_rules",
+                "neighborly.plugins.defaults.create_town",
                 "speakeasy.plugin"
             ]
         }
