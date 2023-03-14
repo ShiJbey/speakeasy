@@ -315,6 +315,12 @@ class Knowledge(Component):
             return
         self.buys[item].remove(buyer)
 
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "buyers": {**self.buys},
+            "produces": {**self.produces}
+        }
+
 
 class Respect(RelationshipFacet):
     """Tracks how much a GameObject respects another"""
