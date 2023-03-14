@@ -47,11 +47,8 @@ def setup(sim: Neighborly, **kwargs: Any) -> None:
     #add events
     speakeasy.events.setup(sim)
 
-    #load prefabs
+    #load prefabs and content
     load_prefab(_RESOURCES_DIR / "character.default.with-inventory.yaml")
-    load_prefab(_RESOURCES_DIR / "character.default.male.yaml")
-    load_prefab(_RESOURCES_DIR / "character.default.female.yaml")
-
-    load_prefab(sim.world, _RESOURCES_DIR / "business.default.with-produces.yaml")
+    load_prefab(_RESOURCES_DIR / "business.default.with-produces.yaml")
     load_data_file(sim, _RESOURCES_DIR / "businesses.yaml")
     load_occupation_types(sim.world, _RESOURCES_DIR / "occupation_types.yaml")

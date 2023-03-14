@@ -1,0 +1,52 @@
+Businesses:
+  - name: CornFarm
+    extends: business::default
+    components:
+      Name:
+        value: CornFarm
+      Business:
+        owner_type: Farmer
+        employee_types:
+          Farmer: 2
+      Activities:
+        activities:
+          - farming
+      Produces:
+        requires:
+          - money
+        produces:
+          - corn
+  - name: Brewery
+    extends: business::default
+    components:
+      Name:
+        value: Brewery
+      Business:
+        owner_type: Brewer
+        employee_types:
+          Brewer: 2
+      Activities:
+        activities:
+          - brewing
+      Produces:
+        requires:
+          - corn
+        produces:
+          - booze
+  - name: Bar
+    extends: business::default
+    components:
+      Name:
+        value: Library
+      Business:
+        owner_type: Owner
+        employee_types:
+          Bartender: 2
+      Activities:
+        activities:
+          - drinking
+      Produces:
+        requires:
+          - booze
+        produces:
+          - money
