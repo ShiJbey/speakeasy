@@ -1,3 +1,4 @@
+import random
 from typing import Dict
 from typing import Any, Dict, Optional, Union, Set
 from enum import Enum, auto
@@ -5,6 +6,7 @@ from enum import Enum, auto
 from neighborly import Component
 from neighborly.core.relationship import RelationshipStatus, RelationshipFacet
 
+randy = random.Random()
 
 class Inventory(Component):
     """
@@ -28,7 +30,12 @@ class Inventory(Component):
             The starting set of items in the inventory
         """
         super().__init__()
-        self.items: Dict[str, int] = {**items} if items else {}
+        if items:
+            self.items: Dict[str, int] = {**items}
+        else:
+            self.items = {}
+            for i in range(randy.randint(4,7)):
+                self.add_item(randy.choice(['booze','wheat','money']), 1)
 
     def add_item(self, item: str, quantity: int) -> None:
         """Add a quantity of an item to the inventory"""
@@ -48,6 +55,8 @@ class Inventory(Component):
                 )
 
         self.items[item] -= quantity
+        if self.items[item] == 0:
+            del self.items[item]
 
     def get_item(self, item: str) -> int:
         """Returns the quantity of an item in the inventory"""
@@ -127,6 +136,7 @@ class EthnicityValue(Enum):
     Latino = auto()
     NativeAmerican = auto()
     White = auto()
+    NotSpecified = auto()
 
 
 class Ethnicity(Component):
@@ -140,12 +150,16 @@ class Ethnicity(Component):
     """
 
     __slots__ = "ethnicity"
-
+    
     def __init__(self, ethnicity: Union[str, EthnicityValue]) -> None:
         super().__init__()
         self.ethnicity: EthnicityValue = \
             ethnicity if isinstance(ethnicity, EthnicityValue) \
             else EthnicityValue[ethnicity]
+        
+        if self.ethnicity == EthnicityValue.NotSpecified:
+            i = randy.randint(0, len(list(EthnicityValue))-1)
+            self.ethnicity = list(EthnicityValue)[i]
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -315,10 +329,16 @@ class Knowledge(Component):
             return
         self.buys[item].remove(buyer)
 
+    def known_producers(self) -> list[int]:
+        known_businesses = []
+        for producers in self.produces.values():
+            known_businesses.extend(list(producers))
+        return known_businesses
+
     def to_dict(self) -> Dict[str, Any]:
         return {
-            "buyers": {**self.buys},
-            "produces": {**self.produces}
+            "buyers": {**dict([(a,list(b)) for (a,b) in self.buys.items()])},
+            "produces": {**dict([(a,list(b)) for (a,b) in self.produces.items()])}
         }
 
 
