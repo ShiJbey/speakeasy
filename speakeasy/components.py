@@ -1,6 +1,6 @@
 import random
 from typing import Dict
-from typing import Any, Dict, Optional, Union, Set
+from typing import Any, Dict, Optional, Union, Set, List
 from enum import Enum, auto
 
 from neighborly import Component
@@ -329,7 +329,7 @@ class Knowledge(Component):
             return
         self.buys[item].remove(buyer)
 
-    def known_producers(self) -> list[int]:
+    def known_producers(self) -> List[int]:
         known_businesses = []
         for producers in self.produces.values():
             known_businesses.extend(list(producers))

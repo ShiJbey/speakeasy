@@ -59,7 +59,7 @@ class GainKnowledgeEffect:
         self.item = item
 
 # utility functions
-def needs_item_from(a: Business, b: Inventory, r : random.Random) -> str|None:
+def needs_item_from(a: Business, b: Inventory, r : random.Random):
     pro_a = a.gameobject.get_component(Produces)
     if True in [i in b.items for i in pro_a.requires]:
         items = [i for i in pro_a.requires if (i in b.items and b.items[i] > 0)]
@@ -752,13 +752,13 @@ class TheftEvent(ActionableLifeEvent):
         initiator = cls._bind_initiator(world, bindings.get("Initiator"))
 
         if initiator is None:
-            print("no init")
+            #print("no init")
             return None
 
         other = cls._bind_other(world, initiator, bindings.get("Other"))
 
         if other is None:
-            print("no victim")
+            #print("no victim")
             return None
 
         return cls(world.get_resource(SimDateTime), initiator, other)
