@@ -1,17 +1,29 @@
 from typing import Any
 from neighborly.systems import System
+from neighborly.core.time import SimDateTime
+from neighborly.core.life_event import LifeEventBuffer
+from neighborly.components import GameCharacter, Active, Business
 
-from speakeasy.components import Inventory, Produces
+from speakeasy.components import Inventory, Produces, Knowledge
+from speakeasy.events import GenerateKnowledgeEvent, get_associated_business, has_knowledge
 
 class ProduceItemsSystem(System):
 
     sys_group = "early-update"
 
     def run(self, *args: Any, **kwargs: Any) -> None:
-        for _, (inventory, produces) in self.world.get_components(
-            (Inventory, Produces)
+        for _, (business, produces) in self.world.get_components(
+            (Business, Produces)
         ):
             has_required_items = True
+
+            # check for owner
+            inventory = None
+            if business.owner:
+                inventory = self.world.get_gameobject(business.owner).get_component(Inventory)
+            
+            if not inventory:
+                continue
 
             # Check if they have enough of the required items
             for item, quantity in produces.requires.items():
@@ -22,10 +34,25 @@ class ProduceItemsSystem(System):
             if has_required_items is False:
                 continue
 
-            # Subtract required items from inventory
+            # Subtract required items from owners' inventory
             for item, quantity in produces.requires.items():
                 inventory.remove_item(item, quantity)
 
-            # Add produces items to inventory
+            # Add produces items to owners' inventory
             for item, quantity in produces.produces.items():
                 inventory.add_item(item, quantity)
+
+class GenerateSelfKnowledgeSystem(System):
+
+    sys_group = "early-update"
+
+    def run(self, *args: Any, **kwargs: Any) -> None:
+        for id, (_, _, knowledge) in self.world.get_components(
+            (GameCharacter, Active, Knowledge)
+        ):
+            character = self.world.get_gameobject(id)
+            biz = get_associated_business(character)
+            if biz and not has_knowledge(knowledge, biz):
+                learning_event = GenerateKnowledgeEvent(self.world.get_resource(SimDateTime), character)
+                self.world.get_resource(LifeEventBuffer).append(learning_event)
+                learning_event.execute()

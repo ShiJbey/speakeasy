@@ -34,6 +34,7 @@ def setup(sim: Neighborly, **kwargs: Any) -> None:
 
     # Add systems
     sim.add_system(speakeasy.systems.ProduceItemsSystem())
+    sim.add_system(speakeasy.systems.GenerateSelfKnowledgeSystem())
 
     # Add social rules
     sim.add_social_rule(speakeasy.social_rules.respect_same_ethnicity)
