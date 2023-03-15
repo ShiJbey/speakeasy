@@ -13,9 +13,9 @@ Businesses:
           - farming
       Produces:
         requires:
-          - money
+          money : 1
         produces:
-          - corn
+          corn : 1
   - name: Brewery
     extends: business::default
     components:
@@ -30,14 +30,14 @@ Businesses:
           - brewing
       Produces:
         requires:
-          - corn
+          corn : 1
         produces:
-          - booze
+          booze : 1
   - name: Bar
     extends: business::default
     components:
       Name:
-        value: Library
+        value: Bar
       Business:
         owner_type: Owner
         employee_types:
@@ -47,6 +47,6 @@ Businesses:
           - drinking
       Produces:
         requires:
-          - booze
+          booze : 1
         produces:
-          - money
+          money : 1

@@ -34,3 +34,5 @@ components:
     life_stage: Adult
   Inventory: { }
   Knowledge: { }
+  Ethnicity: 
+    ethnicity: NotSpecified 

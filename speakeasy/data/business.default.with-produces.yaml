@@ -13,4 +13,6 @@ components:
     building_type: commercial
   Lifespan:
     value: 10
-  Produces: { }
+  Produces:
+    produces: { }
+    requires: { }
