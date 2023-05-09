@@ -12,16 +12,15 @@ from neighborly.exporter import export_to_json
 
 from neighborly.core.roles import Role, RoleList
 from neighborly.plugins.defaults.life_events import RetireLifeEvent, MarriageLifeEvent, DivorceLifeEvent, StartDatingLifeEvent, DatingBreakUp, GetPregnantLifeEvent, FindOwnPlaceLifeEvent
+
 currentdir = os.path.dirname(os.path.abspath(__file__))
 parentdir = os.path.dirname(currentdir)
-
-#sys.path.insert(0, parentdir + '/negotiation_core') 
-#sys.path.insert(0, os.path.abspath(currentdir + '/neighborly/samples'))
-sys.path.insert(0, os.path.abspath(parentdir + '/speakeasy'))
+sys.path.insert(0, os.path.abspath(parentdir))
 
 from neighborly.utils.relationships import get_relationship, get_relationships_with_statuses
 from neighborly.utils.statuses import has_status
 
+import speakeasy
 from speakeasy.events import GainItemEffect, LoseItemEffect, GainKnowledgeEffect, GainRelationshipEffect, LoseRelationshipEffect, needs_item_from, get_associated_business
 from speakeasy.components import Respect, Knowledge, Favors, Produces
 from speakeasy.events import TradeEvent, GoodWordEvent, GiveEvent, TellAboutEvent

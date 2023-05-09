@@ -10,7 +10,7 @@ from neighborly.components.character import (
 )
 from neighborly.core.ecs import GameObject, World
 from neighborly.core.time import SimDateTime
-from neighborly.components.shared import Active
+from neighborly.components.shared import Active, Name
 from neighborly.core.roles import Role, RoleList
 from neighborly.core.life_event import ActionableLifeEvent, LifeEventBuffer
 from neighborly.core.relationship import RelationshipFacet, Relationship, RelationshipModifier, RelationshipManager
@@ -793,7 +793,7 @@ class GiveEvent(ActionableLifeEvent):
     def execute(self) -> None:
         initiator = self["Initiator"]
         other = self["Other"]
-        item = self["Item"]
+        item = self["Item"].get_component(Name).value
 
         #move item between inventories
         initiators_inventory = initiator.get_component(Inventory)
@@ -832,7 +832,7 @@ class GiveEvent(ActionableLifeEvent):
         
         if initiator and other:
             initiator_inventory = initiator.get_component(Inventory)
-            candidates = list(initiator_inventory.items)
+            candidates = [world.spawn_gameobject([Name(item)], item) for item in list(initiator_inventory.items)] #needed to spawn to put item in role list but, creates waste?
             if len(candidates) < 1:
                 return None
             return world.get_resource(random.Random).choice(candidates)

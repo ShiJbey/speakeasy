@@ -24,10 +24,7 @@ sys.path.insert(0, os.path.abspath(currentdir + '/speakeasy'))
 from neighborly.utils.relationships import get_relationship, get_relationships_with_statuses
 from neighborly.utils.statuses import has_status
 
-import speakeasy.negotiation.core as negotiation
-from negotiation import Action, NegotiationState
-import talktown
-import speakeasy
+from speakeasy.negotiation.core import Action, NegotiationState, Agent, ResponseCategory, print_negotiation_trace
 from speakeasy.events import GainItemEffect, LoseItemEffect, GainKnowledgeEffect, GainRelationshipEffect, LoseRelationshipEffect, needs_item_from, get_associated_business
 from speakeasy.components import Respect, Knowledge, Favors, Produces
 from speakeasy.events import TradeEvent, GoodWordEvent, GiveEvent, TellAboutEvent
@@ -38,7 +35,7 @@ class NeighborlyNegotiator():
     def __init__(self, name, game_object : neighborly.GameObject) -> None:
         self.name = name
         self.gameObject = game_object
-        self.agent = negotiation.Agent()
+        self.agent = Agent()
         self.negotiation_state : NegotiationState = None
         #overload the negotiation functions
         self.agent.evaluate_action = types.MethodType(self.evaluate_action_ov, self)
@@ -79,7 +76,7 @@ class NeighborlyNegotiator():
         return possible_actions
 
     #evaluate action (evaluator, verb, subject, object, verbbenefitfor_subject, verbbenefitfor_object):
-    def evaluate_action_ov(self, old_self, action : negotiation.Action) -> int:
+    def evaluate_action_ov(self, old_self, action : Action) -> int:
         neighborly_action_priority = action.val.get_priority()
         effects_dict = action.val.get_effects()
 
@@ -145,8 +142,8 @@ class NeighborlyNegotiator():
         return utility * neighborly_action_priority
 
 def negotiate(agent1, agent2, thing_to_ask_for):
-    result = negotiation.print_negotiation_trace(agent1, agent2, thing_to_ask_for)
-    if result[0] == negotiation.ResponseCategory.ACCEPT:
+    result = print_negotiation_trace(agent1, agent2, thing_to_ask_for)
+    if result[0] == ResponseCategory.ACCEPT:
         return result[1][0]
     else:
         return[]
