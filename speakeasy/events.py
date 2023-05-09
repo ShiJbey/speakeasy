@@ -24,6 +24,7 @@ from neighborly.content_management import (
 )
 from neighborly.simulation import Neighborly, PluginInfo
 
+
 ############
 # TODO: remove placeholders for new stuff
 TRADE_EVENT_RESPECT_THRESHOLD = 1
@@ -31,6 +32,7 @@ GOOD_WORD_EVENT_RESPECT_THRESHOLD = 2
 TELL_ABOUT_EVENT_RESPECT_THRESHOLD = 1
 THEFT_EVENT_RESPECT_THRESHOLD = -5
 HELP_EVENT_RESPECT_THRESHOLD = 5
+NEGOTIATE_EVENT_RESPECT_THRESHOLD = -10
 #############
 
 from speakeasy.components import Inventory, Knowledge, Respect, Favors, Produces
@@ -797,8 +799,8 @@ class GiveEvent(ActionableLifeEvent):
         initiators_inventory = initiator.get_component(Inventory)
         others_inventory = other.get_component(Inventory)
 
-        others_inventory.remove_item(item, 1)
-        initiators_inventory.add_item(item, 1)
+        initiators_inventory.remove_item(item, 1)
+        others_inventory.add_item(item, 1)
 
 
     @staticmethod
@@ -1013,6 +1015,146 @@ class GenerateKnowledgeEvent(ActionableLifeEvent):
 
         return cls(world.get_resource(SimDateTime), initiator)
 
+class NegotiateEvent(ActionableLifeEvent):
+
+    initiator = "Initiator"
+
+    def __init__(
+        self, date: SimDateTime, initiator: GameObject, other: GameObject
+    ) -> None:
+        super().__init__(date, [Role("Initiator", initiator), Role("Other", other)])
+
+    def get_priority(self) -> float:
+        return 1
+
+    def get_effects(self):
+        initiator = self["Initiator"]
+        other = self["Other"]
+
+        return {
+            Role("Initiator", initiator) : [],
+            Role("Other", other) : []
+        }
+
+    def execute(self) -> None:
+        from speakeasy.negotiation.neighborly_classes import NegotiationState, NeighborlyNegotiator, negotiate
+        
+        initiator = self["Initiator"]
+        other = self["Other"]
+
+        #run negotiation
+        negotiator = NeighborlyNegotiator( initiator.get_component(GameCharacter).full_name, initiator )
+        partner = NeighborlyNegotiator( other.get_component(GameCharacter).full_name, other )
+        state = NegotiationState(negotiator.agent, partner.agent, None)
+
+        negotiator.negotiation_state = state
+        partner.negotiation_state = state
+
+        options = negotiator.agent.generate_starting_possible_actions()
+        thing_to_ask_for = random.choice(options)
+        state.setup_initial_ask(thing_to_ask_for)
+        print(f'Running negotiation between {negotiator.name} and {partner.name}:')
+        agreement = negotiate(negotiator.agent, partner.agent, thing_to_ask_for)
+
+        #trigger each event from the agreed upon package
+        for item in agreement:
+            triggered_event = item.val
+            initiator.world.get_resource(LifeEventBuffer).append(triggered_event)
+            triggered_event.execute()
+
+            #add some mutual respect
+            get_relationship(initiator, other).get_component(Relationship).add_modifier(RelationshipModifier('Gained respect due to successful negotiation.', {Respect:1}))
+            get_relationship(other, initiator).get_component(Relationship).add_modifier(RelationshipModifier('Gained respect due to successful negotiation.', {Respect:1}))
+
+        if len(agreement) == 0:
+            #lose some mutual respect
+            get_relationship(initiator, other).get_component(Relationship).add_modifier(RelationshipModifier('Lost respect due to failed negotiation.', {Respect:-1}))
+            get_relationship(other, initiator).get_component(Relationship).add_modifier(RelationshipModifier('Lost respect due to failed negotiation.', {Respect:-1}))
+
+    @staticmethod
+    def _bind_initiator(
+        world: World, candidate: Optional[GameObject] = None
+    ) -> Optional[GameObject]:
+        if candidate:
+            candidates = [candidate]
+        else:
+            candidates = [
+                world.get_gameobject(result[0])
+                for result in world.get_components((GameCharacter, Active, Inventory, Knowledge))
+            ]
+
+        matches = []
+
+        #no prereqs
+        for candidate in candidates:
+            matches.append(candidate)
+
+        if matches:
+            return world.get_resource(random.Random).choice(matches)
+
+        return None
+
+    @staticmethod
+    def _bind_other(
+        world: World, initiator: GameObject, candidate: Optional[GameObject] = None
+    ) -> Optional[GameObject]:
+
+        respect_threshold = NEGOTIATE_EVENT_RESPECT_THRESHOLD
+
+        if candidate:
+            if has_relationship(initiator, candidate) and has_relationship(
+                candidate, initiator
+            ):
+                candidates = [candidate]
+            else:
+                return None
+        else:
+            candidates = [
+                world.get_gameobject(c)
+                for c in initiator.get_component(RelationshipManager).targets()
+            ]
+
+        matches: List[GameObject] = []
+
+        for character in candidates:
+            if character == initiator:
+                continue
+
+            #Prereq: mutual respect
+            outgoing_relationship = get_relationship(initiator, character)
+            outgoing_respect = outgoing_relationship.get_component(Respect)
+
+            if outgoing_respect.get_value() < respect_threshold:
+                continue
+
+            matches.append(character)
+
+        if matches:
+            return world.get_resource(random.Random).choice(matches)
+
+        return None
+
+    @classmethod
+    def instantiate(
+        cls,
+        world: World,
+        bindings: RoleList,
+    ) -> Optional[ActionableLifeEvent]:
+        
+        initiator = cls._bind_initiator(world, bindings.get("Initiator"))
+
+        if initiator is None:
+            return None
+        
+        other = cls._bind_other(world, initiator, bindings.get("Other"))
+
+        if other is None:
+            return None
+        
+        return cls(world.get_resource(SimDateTime), initiator, other)
+    
+    def __str__(self) -> str:
+        return f"{super().__str__()}"
 
 plugin_info = PluginInfo(
     name="speakeasy events plugin",
@@ -1032,3 +1174,4 @@ def setup(sim: Neighborly, **kwargs: Any):
     life_event_library.add(TellAboutEvent)
     life_event_library.add(LearnAboutEvent)
     life_event_library.add(GenerateKnowledgeEvent)
+    life_event_library.add(NegotiateEvent)
