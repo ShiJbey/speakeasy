@@ -4,10 +4,11 @@ from neighborly import GameObject
 from neighborly.components import Virtues
 from neighborly.core.relationship import RelationshipFacet, Romance, Friendship
 from neighborly.utils.query import are_related
+from neighborly.decorators import social_rule
 
 from speakeasy.components import Ethnicity, Faction, Respect
 
-
+@social_rule("Characters with the same ethnicity gain a boost in respect")
 def respect_same_ethnicity(
     subject: GameObject,
     target: GameObject
@@ -20,7 +21,7 @@ def respect_same_ethnicity(
 
     return {}
 
-
+@social_rule("Characters with different ethnicities lose respect")
 def disrespect_different_ethnicity(
     subject: GameObject,
     target: GameObject
@@ -33,7 +34,7 @@ def disrespect_different_ethnicity(
 
     return {}
 
-
+@social_rule("Characters with the same faction gain a boost in respect")
 def respect_same_faction(
     subject: GameObject,
     target: GameObject
@@ -46,7 +47,7 @@ def respect_same_faction(
 
     return {}
 
-
+@social_rule("Characters that are closely related gain a boost in respect")
 def respect_for_family(
     subject: GameObject,
     target: GameObject
@@ -58,7 +59,7 @@ def respect_for_family(
 
     return {}
 
-
+@social_rule("Characters with shared high/low virtues gain romance points")
 def romance_boost_from_shared_virtues(
     subject: GameObject,
     target: GameObject
@@ -78,7 +79,7 @@ def romance_boost_from_shared_virtues(
         Romance: len(shared_likes) + len(shared_dislikes)
     }
 
-
+@social_rule("Characters with shared high/low virtues gain romance points")
 def romance_loss_from_virtue_conflicts(
     subject: GameObject,
     target: GameObject
@@ -98,7 +99,7 @@ def romance_loss_from_virtue_conflicts(
         Romance: -1 * (len(subject_conflicts) + len(target_conflicts))
     }
 
-
+@social_rule("Characters with more similar virtues will be better friends")
 def friendship_virtue_compatibility(
     subject: GameObject,
     target: GameObject

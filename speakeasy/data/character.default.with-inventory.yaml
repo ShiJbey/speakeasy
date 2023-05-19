@@ -24,8 +24,8 @@ components:
   CanAge: {}
   StatusManager: {}
   FrequentedLocations: {}
-  AIComponent:
-    brain: "default"
+  AIBrain: {}
+  Goals: {}
   EventHistory: {}
   Age: {}
   Gender:

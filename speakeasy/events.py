@@ -8,30 +8,27 @@ from neighborly.components.business import (
 from neighborly.components.character import (
     GameCharacter,
 )
-from neighborly.core.ecs import GameObject, World
+from neighborly import NeighborlyConfig
+from neighborly.core.ecs import GameObject, World, Active
 from neighborly.core.time import SimDateTime
-from neighborly.components.shared import Active, Name
+from neighborly.components.shared import Name
 from neighborly.core.roles import Role, RoleList
-from neighborly.core.life_event import ActionableLifeEvent, LifeEventBuffer
+from neighborly.core.life_event import RandomLifeEvent, AllEvents
 from neighborly.core.relationship import RelationshipFacet, Relationship, RelationshipModifier, RelationshipManager
-from neighborly.utils.relationships import (
+from neighborly.core.relationship import (
     get_relationship,
-    has_relationship,
     get_relationships_with_statuses
 )
-from neighborly.content_management import (
-    LifeEventLibrary
-)
+from neighborly.decorators import random_life_event
 from neighborly.simulation import Neighborly, PluginInfo
-
 
 ############
 # TODO: remove placeholders for new stuff
-TRADE_EVENT_RESPECT_THRESHOLD = 1
-GOOD_WORD_EVENT_RESPECT_THRESHOLD = 2
-TELL_ABOUT_EVENT_RESPECT_THRESHOLD = 1
-THEFT_EVENT_RESPECT_THRESHOLD = -5
-HELP_EVENT_RESPECT_THRESHOLD = 5
+TRADE_EVENT_RESPECT_THRESHOLD = 5
+GOOD_WORD_EVENT_RESPECT_THRESHOLD = 6
+TELL_ABOUT_EVENT_RESPECT_THRESHOLD = 10
+THEFT_EVENT_RESPECT_THRESHOLD = -4
+HELP_EVENT_RESPECT_THRESHOLD = 12
 NEGOTIATE_EVENT_RESPECT_THRESHOLD = -10
 #############
 
@@ -78,11 +75,11 @@ def get_associated_business(obj : GameObject) -> Business:
     if obj.has_component(BusinessOwner):
         bizown = obj.get_component(BusinessOwner)
     if obj.has_component(RelationshipManager):
-        employed = [obj.world.get_gameobject(rel.target()) for rel in get_relationships_with_statuses(obj, EmployeeOf)]
+        employed = [obj.world.get_gameobject(rel.get_component(Relationship).target) for rel in get_relationships_with_statuses(obj, EmployeeOf)]
     associated_biz = None
 
     if len(employed) > 0:
-        associated_biz = employed[0].get_component(Business)
+        associated_biz = obj.world.get_gameobject(employed[0].get_component(BusinessOwner).business).get_component(Business)
 
     if bizown:
         associated_biz = obj.world.get_gameobject(bizown.business).get_component(Business)
@@ -90,7 +87,8 @@ def get_associated_business(obj : GameObject) -> Business:
     return associated_biz
 
 #learning that someone's biz produces an item
-class LearnAboutEvent(ActionableLifeEvent):
+@random_life_event()
+class LearnAboutEvent(RandomLifeEvent):
 
     initiator = "Initiator"
 
@@ -101,6 +99,9 @@ class LearnAboutEvent(ActionableLifeEvent):
         self.business = None
 
     def get_priority(self) -> float:
+        return 1
+    
+    def get_probability(self) -> float:
         return 1
 
     def get_effects(self):
@@ -149,7 +150,7 @@ class LearnAboutEvent(ActionableLifeEvent):
         cls,
         world: World,
         bindings: RoleList,
-    ) -> Optional[ActionableLifeEvent]:
+    ) -> Optional[RandomLifeEvent]:
 
         initiator = cls._bind_initiator(world, bindings.get("Initiator"))
 
@@ -164,7 +165,8 @@ class LearnAboutEvent(ActionableLifeEvent):
         return cls(world.get_resource(SimDateTime), initiator, other)
 
 # First pass at a trading event
-class TradeEvent(ActionableLifeEvent):
+@random_life_event()
+class TradeEvent(RandomLifeEvent):
 
     initiator = "Initiator"
 
@@ -176,6 +178,9 @@ class TradeEvent(ActionableLifeEvent):
         self.others_item = others_item
 
     def get_priority(self) -> float:
+        return 1
+
+    def get_probability(self) -> float:
         return 1
 
     def get_effects(self):
@@ -206,8 +211,8 @@ class TradeEvent(ActionableLifeEvent):
         others_inventory.add_item(initiators_item, 1)
 
         #add some mutual respect
-        get_relationship(initiator, other).get_component(Relationship).add_modifier(RelationshipModifier('Gained respect due to trade.', {Respect:1}))
-        get_relationship(other, initiator).get_component(Relationship).add_modifier(RelationshipModifier('Gained respect due to trade.', {Respect:1}))
+        get_relationship(initiator, other).get_component(Respect).increment(1)#.get_component(Relationship).add_modifier(RelationshipModifier('Gained respect due to trade.', {Respect:1}))
+        get_relationship(other, initiator).get_component(Respect).increment(1)#.add_modifier(RelationshipModifier('Gained respect due to trade.', {Respect:1}))
 
     @staticmethod
     def _bind_initiator(
@@ -229,16 +234,21 @@ class TradeEvent(ActionableLifeEvent):
             if len(inventory.items) < 1:
                 continue
 
+            candidate_biz = get_associated_business(candidate)
+            if not candidate_biz:
+                continue
+
             known_businesses = [world.get_gameobject(i) for i in candidate.get_component(Knowledge).known_producers()]
 
             known_business_associates = [world.get_gameobject(i.get_component(Business).owner) for i in known_businesses if i.get_component(Business).owner]
 
-            known_business_employees = [world.get_gameobject(i.get_component(Business).get_employees()) for i in known_businesses if i.get_component(Business).get_employees()]
+            known_business_employees = [[world.get_gameobject(e) for e in biz.get_component(Business).get_employees()] for biz in known_businesses if biz.get_component(Business).get_employees()]
 
             for emps in known_business_employees:
                 known_business_associates.extend(emps)
 
             known_business_relationships = [get_relationship(candidate, o) for o in known_business_associates]
+            #print("MY relationships wit them:", [r.get_component(Respect).get_value() for r in known_business_relationships])
 
             potential_offered_items = [i for i in inventory.items]
 
@@ -248,7 +258,7 @@ class TradeEvent(ActionableLifeEvent):
                 prod = biz.gameobject.get_component(Produces)
                 potential_offered_items = [i for i in potential_offered_items if i not in prod.requires]
 
-            if True in [r.get_component(Respect).get_value() > 0 for r in known_business_relationships] and len(potential_offered_items) > 0:
+            if True in [r.get_component(Respect).get_value() > TRADE_EVENT_RESPECT_THRESHOLD for r in known_business_relationships] and len(potential_offered_items) > 0:
                 matches.append((candidate, world.get_resource(random.Random).choice(potential_offered_items)))
 
         if matches:
@@ -264,16 +274,11 @@ class TradeEvent(ActionableLifeEvent):
         respect_threshold = TRADE_EVENT_RESPECT_THRESHOLD
 
         if candidate:
-            if has_relationship(initiator, candidate) and has_relationship(
-                candidate, initiator
-            ):
-                candidates = [candidate]
-            else:
-                return None
+            candidates = [candidate]
         else:
             candidates = [
                 world.get_gameobject(c)
-                for c in initiator.get_component(RelationshipManager).targets()
+                for c in initiator.get_component(RelationshipManager).outgoing.keys()
             ]
 
         matches: List[GameObject] = []
@@ -285,25 +290,21 @@ class TradeEvent(ActionableLifeEvent):
             #Prereq: initiator need
             initiators_biz = get_associated_business(initiator)
             characters_inv = character.get_component(Inventory)
-            
-            if not initiators_biz:
-                continue
 
             needed_item = needs_item_from(initiators_biz, characters_inv, world.get_resource(random.Random)) 
             if needed_item is None:
+                #print('init needs nothing from other?')
                 continue
 
             #Prereq: mutual respect
             outgoing_relationship = get_relationship(initiator, character)
-
-            if not has_relationship(character, initiator):
-                continue
             incoming_relationship = get_relationship(character, initiator)
 
             outgoing_respect = outgoing_relationship.get_component(Respect)
             incoming_respect = incoming_relationship.get_component(Respect)
 
             if outgoing_respect.get_value() < respect_threshold or incoming_respect.get_value() < respect_threshold:
+                #print('init and other dont mutually respect weach other?')
                 continue
 
             matches.append((character, needed_item))
@@ -318,11 +319,12 @@ class TradeEvent(ActionableLifeEvent):
         cls,
         world: World,
         bindings: RoleList,
-    ) -> Optional[ActionableLifeEvent]:
+    ) -> Optional[RandomLifeEvent]:
 
         initiator_tup = cls._bind_initiator(world, bindings.get("Initiator"))
 
         if initiator_tup is None:
+            #print("trade failed on initiator_tup")
             return None
 
         initiator, i_item = initiator_tup
@@ -330,6 +332,7 @@ class TradeEvent(ActionableLifeEvent):
         other_tup = cls._bind_other(world, initiator, bindings.get("Other"))
 
         if other_tup is None:
+            #print("trade failed on other_tup")
             return None
 
         other, o_item = other_tup
@@ -338,7 +341,8 @@ class TradeEvent(ActionableLifeEvent):
     def __str__(self) -> str:
         return f"{super().__str__()}, i_item={str(self.initiators_item)}, o_item={str(self.others_item)}"
 
-class GoodWordEvent(ActionableLifeEvent):
+@random_life_event()
+class GoodWordEvent(RandomLifeEvent):
 
     initiator = "Initiator"
 
@@ -349,6 +353,9 @@ class GoodWordEvent(ActionableLifeEvent):
 
     def get_priority(self) -> float:
         return 1
+    
+    def get_probability(self) -> float:
+        return 1
 
     def get_effects(self):
         initiator = self["Initiator"]
@@ -356,7 +363,7 @@ class GoodWordEvent(ActionableLifeEvent):
         subject = self["Subject"]
 
         return {
-            Role("Initiator", initiator) : [LoseRelationshipEffect(get_relationship(initiator, subject), Favors)],
+            Role("Initiator", initiator) : [LoseRelationshipEffect(get_relationship(initiator, subject), Favors)],#, LoseRelationshipEffect(get_relationship(other, initiator), Respect)
             Role("Subject", subject) : [GainRelationshipEffect(get_relationship(other, subject), Respect)]
         }
 
@@ -365,11 +372,23 @@ class GoodWordEvent(ActionableLifeEvent):
         other = self["Other"]
         subject = self["Subject"]
 
+        favors_sub_owes_init_DISCOURAGING = get_relationship(subject, initiator).get_component(Favors).favors
+        favors_init_owed_sub_ENCOURAGING = get_relationship(initiator, subject).get_component(Favors).favors
+        #print(f"Prior, SUB now owes INIT: {favors_sub_owes_init_DISCOURAGING} + 1, and INIT ALREADY OWED SUB {favors_init_owed_sub_ENCOURAGING} (-1)?")
+        
         #add some respect
-        get_relationship(other, subject).get_component(Relationship).add_modifier(RelationshipModifier('Gained respect due to good word.', {Respect:1}))
+        get_relationship(other, subject).get_component(Respect).increment(1)#add_modifier(RelationshipModifier('Gained respect due to good word.', {Respect:1}))
 
-        #remove some favor
-        get_relationship(initiator, subject).get_component(Relationship).add_modifier(RelationshipModifier('Used up favor by putting in a good word.', {Favors:-1}))
+        #remove some favor, or add if there wasn't a favor owed.
+        if (favors_init_owed_sub_ENCOURAGING > 0):
+            get_relationship(initiator, subject).get_component(Favors).favors -= 1
+        else:
+            get_relationship(subject, initiator).get_component(Favors).favors += 1
+
+        favors_sub_owes_init_DISCOURAGING = get_relationship(subject, initiator).get_component(Favors).favors
+        favors_init_owed_sub_ENCOURAGING = get_relationship(initiator, subject).get_component(Favors).favors
+        #print(f"{initiator.name} puts in a good word with {other.name} about {subject.name}, bringing total favors owed by {subject.name} to {initiator.name} to: {favors_sub_owes_init_DISCOURAGING}")
+        #print(f"After, SUB now owes INIT: {favors_sub_owes_init_DISCOURAGING} + 1, and INIT ALREADY OWED SUB {favors_init_owed_sub_ENCOURAGING} (-1)?")
 
     @staticmethod
     def _bind_initiator(
@@ -380,11 +399,25 @@ class GoodWordEvent(ActionableLifeEvent):
         else:
             candidates = [
                 world.get_gameobject(result[0])
-                for result in world.get_components((GameCharacter, Active))
+                for result in world.get_components((GameCharacter, Active, RelationshipManager))
             ]
 
-        if candidates:
-            return world.get_resource(random.Random).choice(candidates)
+        #initiator must respect someone... who respects them
+        matches = []
+        for character in candidates:
+            people_they_respect = [world.get_gameobject(r).get_component(Relationship).target for r in character.get_component(RelationshipManager).outgoing.values() if world.get_gameobject(r).get_component(Respect).get_value() > GOOD_WORD_EVENT_RESPECT_THRESHOLD]
+            if len(people_they_respect) < 1:
+                continue
+
+            people_mutually_respected = [world.get_gameobject(target) for target in people_they_respect if get_relationship(world.get_gameobject(target), character).get_component(Respect).get_value() > GOOD_WORD_EVENT_RESPECT_THRESHOLD]
+
+            if len(people_mutually_respected) < 1:
+                continue
+
+            matches.append(character)
+
+        if matches:
+            return world.get_resource(random.Random).choice(matches)
 
         return None
 
@@ -396,14 +429,11 @@ class GoodWordEvent(ActionableLifeEvent):
         respect_threshold = GOOD_WORD_EVENT_RESPECT_THRESHOLD
 
         if candidate:
-            if has_relationship(initiator, candidate):
-                candidates = [candidate]
-            else:
-                return None
+            candidates = [candidate]
         else:
             candidates = [
                 world.get_gameobject(c)
-                for c in initiator.get_component(RelationshipManager).targets()
+                for c in initiator.get_component(RelationshipManager).outgoing.keys()
             ]
 
         matches: List[GameObject] = []
@@ -427,12 +457,7 @@ class GoodWordEvent(ActionableLifeEvent):
         respect_threshold = GOOD_WORD_EVENT_RESPECT_THRESHOLD
 
         if candidate:
-            if has_relationship(
-                candidate, initiator
-            ):
-                candidates = [candidate]
-            else:
-                return None
+            candidates = [candidate]
         else:
             candidates = [
                 world.get_gameobject(result[0])
@@ -443,6 +468,9 @@ class GoodWordEvent(ActionableLifeEvent):
         matches: List[GameObject] = []
 
         for character in candidates:
+            if character == subject:
+                continue
+
             #prereq: other must respect initiator
             respect = get_relationship(character, initiator).get_component(Respect).get_value()
             if respect >= respect_threshold:
@@ -458,7 +486,7 @@ class GoodWordEvent(ActionableLifeEvent):
         cls,
         world: World,
         bindings: RoleList,
-    ) -> Optional[ActionableLifeEvent]:
+    ) -> Optional[RandomLifeEvent]:
 
         initiator = cls._bind_initiator(world, bindings.get("Initiator"))
 
@@ -477,7 +505,8 @@ class GoodWordEvent(ActionableLifeEvent):
 
         return cls(world.get_resource(SimDateTime), initiator, other, subject)
 
-class TellAboutEvent(ActionableLifeEvent):
+@random_life_event()
+class TellAboutEvent(RandomLifeEvent):
 
     initiator = "Initiator"
 
@@ -488,6 +517,9 @@ class TellAboutEvent(ActionableLifeEvent):
 
     def get_priority(self) -> float:
         return 1
+    
+    def get_probability(self) -> float:
+        return 1
 
     def get_effects(self):
         initiator = self["Initiator"]
@@ -497,7 +529,7 @@ class TellAboutEvent(ActionableLifeEvent):
         subjects_item = list(get_associated_business(subject).gameobject.get_component(Produces).produces.keys())[0]
 
         return {
-            Role("Initiator", initiator) : [GainRelationshipEffect(get_relationship(other, initiator), Respect)],
+            Role("Initiator", initiator) : [GainRelationshipEffect(get_relationship(other, initiator), Respect), LoseRelationshipEffect(get_relationship(subject, initiator), Respect)],
             Role("Other", other) : [GainKnowledgeEffect(subjects_item)]
         }
 
@@ -511,13 +543,13 @@ class TellAboutEvent(ActionableLifeEvent):
 
         #add some knowledge
         learning_event = LearnAboutEvent(initiator.world.get_resource(SimDateTime), other, subject)
-        initiator.world.get_resource(LifeEventBuffer).append(learning_event)
+        initiator.world.get_resource(AllEvents).append(learning_event)
         learning_event.execute()
 
         #other.get_component(Knowledge).produces[subjects_item].append(subjects_business)
 
         #add some respect
-        get_relationship(initiator, subject).get_component(Relationship).add_modifier(RelationshipModifier('Gained respect due to getting information.', {Respect:1}))
+        get_relationship(initiator, subject).get_component(Respect).increment(1)#.add_modifier(RelationshipModifier('Gained respect due to getting information.', {Respect:1}))
 
     @staticmethod
     def _bind_initiator(
@@ -546,16 +578,11 @@ class TellAboutEvent(ActionableLifeEvent):
         respect_threshold = TELL_ABOUT_EVENT_RESPECT_THRESHOLD
 
         if candidate:
-            if has_relationship(
-                initiator, candidate
-            ):
-                candidates = [candidate]
-            else:
-                return None
+            candidates = [candidate]
         else:
             all_candidates = [
                 world.get_gameobject(c)
-                for c in initiator.get_component(RelationshipManager).targets()
+                for c in initiator.get_component(RelationshipManager).outgoing.keys()
             ]
             #prereq: initiator must respect other
             candidates = []
@@ -611,7 +638,7 @@ class TellAboutEvent(ActionableLifeEvent):
         cls,
         world: World,
         bindings: RoleList,
-    ) -> Optional[ActionableLifeEvent]:
+    ) -> Optional[RandomLifeEvent]:
 
         initiator = cls._bind_initiator(world, bindings.get("Initiator"))
 
@@ -631,7 +658,8 @@ class TellAboutEvent(ActionableLifeEvent):
         return cls(world.get_resource(SimDateTime), initiator, other, subject)
 
 #robbing a BUSINESS
-class TheftEvent(ActionableLifeEvent):
+@random_life_event()
+class TheftEvent(RandomLifeEvent):
 
     initiator = "Initiator"
 
@@ -641,6 +669,9 @@ class TheftEvent(ActionableLifeEvent):
         super().__init__(date, [Role("Initiator", initiator), Role("Other", other)])
 
     def get_priority(self) -> float:
+        return 1
+    
+    def get_probability(self) -> float:
         return 1
 
     def get_effects(self):
@@ -659,15 +690,19 @@ class TheftEvent(ActionableLifeEvent):
 
         #move item between inventories
         initiators_inventory = initiator.get_component(Inventory)
-        #others_inventory = other.get_component(Inventory)
-        others_biz = get_associated_business(other)
-        others_item = list(others_biz.gameobject.get_component(Produces).produces)[0]
+        others_owner = initiator.world.get_gameobject(other.owner)
+        others_inventory = others_owner.get_component(Inventory)
 
-        #others_inventory.remove_item(others_item, 1)
-        initiators_inventory.add_item(others_item, 1)
+        for stolen_item_idx in range(initiator.world.get_resource(random.Random).randint(1,5)):
+            if len([item for item in others_inventory.items if others_inventory.items[item]>0]) < 1:
+                continue
 
-        #lose some respect
-        get_relationship(initiator, other).get_component(Relationship).add_modifier(RelationshipModifier('Lost respect due to theft.', {Respect:-3}))
+            others_item = initiator.world.get_resource(random.Random).choice([item for item in others_inventory.items if others_inventory.items[item]>0])
+            others_inventory.remove_item(others_item, 1)
+            initiators_inventory.add_item(others_item, 1)
+
+            #lose some respect
+            get_relationship(others_owner, initiator).get_component(Respect).increment(-3)#.add_modifier(RelationshipModifier('Lost respect due to theft.', {Respect:-3}))
 
     @staticmethod
     def _bind_initiator(
@@ -686,58 +721,26 @@ class TheftEvent(ActionableLifeEvent):
         #initiator must disrespect someonethey know
         for candidate in candidates:
 
-
             known_businesses = [world.get_gameobject(i) for i in candidate.get_component(Knowledge).known_producers()]
+            #print(f"I know {len(known_businesses)} biz's")
 
             known_business_associates = [world.get_gameobject(i.get_component(Business).owner) for i in known_businesses if i.get_component(Business).owner]
-
-            known_business_employees = [world.get_gameobject(i.get_component(Business).get_employees()) for i in known_businesses if i.get_component(Business).get_employees()]
+            #print(f"It has {len(known_business_associates)} owners")
+            known_business_employees = [[world.get_gameobject(emp) for emp in biz_object.get_component(Business).get_employees()] for biz_object in known_businesses if biz_object.get_component(Business).get_employees()]
+            #print(f"It has {len(known_business_employees)} employees")
 
             for emps in known_business_employees:
                 known_business_associates.extend(emps)
 
             known_business_relationships = [get_relationship(candidate, o) for o in known_business_associates]
+            #print("My relatioships with them: ", [r.get_component(Respect).get_value() for r in known_business_relationships])
 
-            if True in [r.get_component(Respect).get_value() < 0 for r in known_business_relationships]:
-                matches.append(candidate)
+            #print("ALL my relationships: ", [candidate.world.get_gameobject(r_id).get_component(Respect).get_value() for r_id in candidate.get_component(RelationshipManager).outgoing.values()])
 
-        if matches:
-            return world.get_resource(random.Random).choice(matches)
-
-        return None
-
-    @staticmethod
-    def _bind_other(
-        world: World, initiator: GameObject, candidate: Optional[GameObject] = None
-    ) -> Optional[GameObject]:
-
-        respect_threshold = THEFT_EVENT_RESPECT_THRESHOLD
-
-        if candidate:
-            if has_relationship(initiator, candidate):
-                candidates = [candidate]
-            else:
-                return None
-        else:
-            candidates = [
-                world.get_gameobject(c)
-                for c in initiator.get_component(Knowledge).known_producers()
-            ]
-
-        matches: List[GameObject] = []
-
-        for character in candidates:
-            #Prereq: other is associated with biz
-            characters_biz = get_associated_business(character)
-            if not characters_biz:
-                continue
-
-            #Prereq: negative respect
-            outgoing_relationship = get_relationship(initiator, character)
-            outgoing_respect = outgoing_relationship.get_component(Respect)
-
-            if outgoing_respect.get_value() <= respect_threshold:
-                matches.append(character)
+            if True in [r.get_component(Respect).get_value() < THEFT_EVENT_RESPECT_THRESHOLD for r in known_business_relationships]:
+                victim = world.get_resource(random.Random).choice([get_associated_business(world.get_gameobject(r.get_component(Relationship).target)) for r in known_business_relationships if r.get_component(Respect).get_value() < THEFT_EVENT_RESPECT_THRESHOLD])
+                matches.append((candidate, victim))
+                #print('chose a victim and candidate.')
 
         if matches:
             return world.get_resource(random.Random).choice(matches)
@@ -749,26 +752,32 @@ class TheftEvent(ActionableLifeEvent):
         cls,
         world: World,
         bindings: RoleList,
-    ) -> Optional[ActionableLifeEvent]:
+    ) -> Optional[RandomLifeEvent]:
 
-        initiator = cls._bind_initiator(world, bindings.get("Initiator"))
+        #print("attempting theft..")
+        initiator_tup = cls._bind_initiator(world, bindings.get("Initiator"))
 
-        if initiator is None:
-            #print("no init")
+        if initiator_tup is None:
+            #print("theft failed on initiator")
             return None
 
-        other = cls._bind_other(world, initiator, bindings.get("Other"))
+        initiator, other = initiator_tup
 
         if other is None:
-            #print("no victim")
+            #print("theft failed on other")
             return None
 
         return cls(world.get_resource(SimDateTime), initiator, other)
+    
+    def __str__(self) -> str:
+        return f"{super().__str__()}"
 
-class ExtortBusinessEvent(TheftEvent):
-    pass
+#@random_life_event()
+#class ExtortBusinessEvent(TheftEvent):
+#    pass
 
-class GiveEvent(ActionableLifeEvent):
+@random_life_event()
+class GiveEvent(RandomLifeEvent):
 
     initiator = "Initiator"
 
@@ -779,6 +788,9 @@ class GiveEvent(ActionableLifeEvent):
 
     def get_priority(self) -> float:
         return 1
+    
+    def get_probability(self) -> float:
+        return 1
 
     def get_effects(self):
         initiator = self["Initiator"]
@@ -786,8 +798,8 @@ class GiveEvent(ActionableLifeEvent):
         item = self["Item"]
 
         return {
-            Role("Initiator", initiator) : [LoseItemEffect(item)],
-            Role("Other", other)  : [GainItemEffect(item)]
+            Role("Initiator", initiator) : [LoseItemEffect(item.get_component(Name).value)],
+            Role("Other", other)  : [GainItemEffect(item.get_component(Name).value)]
         }
 
     def execute(self) -> None:
@@ -844,26 +856,30 @@ class GiveEvent(ActionableLifeEvent):
         cls,
         world: World,
         bindings: RoleList,
-    ) -> Optional[ActionableLifeEvent]:
+    ) -> Optional[RandomLifeEvent]:
 
         initiator = cls._bind_initiator(world, bindings.get("Initiator"))
 
         if initiator is None:
+            #print("give failed on initiator")
             return None
 
         other = cls._bind_other(world, initiator, bindings.get("Other"))
 
         if other is None:
+            #print("give failed on other")
             return None
         
         item = cls._bind_item(world, initiator, other)
 
         if item is None:
+            #print("give failed on item")
             return None
 
         return cls(world.get_resource(SimDateTime), initiator, other, item)
     
-class HelpWithRivalGangEvent(ActionableLifeEvent):
+@random_life_event()
+class HelpWithRivalGangEvent(RandomLifeEvent):
 
     initiator = "Initiator"
 
@@ -873,6 +889,9 @@ class HelpWithRivalGangEvent(ActionableLifeEvent):
         super().__init__(date, [Role("Initiator", initiator), Role("Other", other)])
 
     def get_priority(self) -> float:
+        return 1
+    
+    def get_probability(self) -> float:
         return 1
 
     def get_effects(self):
@@ -888,11 +907,10 @@ class HelpWithRivalGangEvent(ActionableLifeEvent):
         other = self["Other"]
 
         #add some respect
-        get_relationship(other, initiator).get_component(Relationship).add_modifier(RelationshipModifier('Gained respect due to help witha  rival gang.', {Respect:1}))
+        get_relationship(other, initiator).get_component(Respect).increment(1) #.add_modifier(RelationshipModifier('Gained respect due to help witha  rival gang.', {Respect:1}))
 
         #add a favor
-        get_relationship(other, initiator).get_component(Relationship).add_modifier(RelationshipModifier('Owe a Favors due to getting help with a rival gang.', {Favors:1}))
-
+        get_relationship(other, initiator).get_component(Favors).favors += 1#.add_modifier(RelationshipModifier('Owe a Favors due to getting help with a rival gang.', {Favors:1}))
 
     @staticmethod
     def _bind_initiator(
@@ -912,14 +930,11 @@ class HelpWithRivalGangEvent(ActionableLifeEvent):
         respect_threshold = HELP_EVENT_RESPECT_THRESHOLD
         
         if candidate:
-            if has_relationship(initiator, candidate):
-                candidates = [candidate]
-            else:
-                return None
+            candidates = [candidate]
         else:
             candidates = [
                 world.get_gameobject(c)
-                for c in initiator.get_component(RelationshipManager).targets()
+                for c in initiator.get_component(RelationshipManager).outgoing.keys()
             ]
 
         matches: List[GameObject] = []
@@ -940,7 +955,7 @@ class HelpWithRivalGangEvent(ActionableLifeEvent):
         cls,
         world: World,
         bindings: RoleList,
-    ) -> Optional[ActionableLifeEvent]:
+    ) -> Optional[RandomLifeEvent]:
 
         initiator = cls._bind_initiator(world, bindings.get("Initiator"))
 
@@ -953,8 +968,12 @@ class HelpWithRivalGangEvent(ActionableLifeEvent):
             return None
 
         return cls(world.get_resource(SimDateTime), initiator, other)
+    
+    def __str__(self) -> str:
+        return f"{super().__str__()}"
 
-class GenerateKnowledgeEvent(ActionableLifeEvent):
+@random_life_event()
+class GenerateKnowledgeEvent(RandomLifeEvent):
     initiator = "Initiator"
 
     def __init__(
@@ -968,12 +987,15 @@ class GenerateKnowledgeEvent(ActionableLifeEvent):
     def get_effects(self):
         return {}
     
+    def get_probability(self) -> float:
+        return 1
+    
     def execute(self) -> None:
         initiator = self["Initiator"]
 
         #add knowledge
         learning_event = LearnAboutEvent(initiator.world.get_resource(SimDateTime), initiator, initiator)
-        initiator.world.get_resource(LifeEventBuffer).append(learning_event)
+        initiator.world.get_resource(AllEvents).append(learning_event)
         learning_event.execute()
 
     @staticmethod
@@ -1006,7 +1028,7 @@ class GenerateKnowledgeEvent(ActionableLifeEvent):
         cls,
         world: World,
         bindings: RoleList,
-    ) -> Optional[ActionableLifeEvent]:
+    ) -> Optional[RandomLifeEvent]:
 
         initiator = cls._bind_initiator(world, bindings.get("Initiator"))
 
@@ -1015,7 +1037,10 @@ class GenerateKnowledgeEvent(ActionableLifeEvent):
 
         return cls(world.get_resource(SimDateTime), initiator)
 
-class NegotiateEvent(ActionableLifeEvent):
+@random_life_event()
+class NegotiateEvent(RandomLifeEvent):
+    from speakeasy.negotiation.core import get_initial_ask_options
+    from speakeasy.negotiation.neighborly_classes import NegotiationState, NeighborlyNegotiator, negotiate
 
     initiator = "Initiator"
 
@@ -1025,6 +1050,9 @@ class NegotiateEvent(ActionableLifeEvent):
         super().__init__(date, [Role("Initiator", initiator), Role("Other", other)])
 
     def get_priority(self) -> float:
+        return 1
+    
+    def get_probability(self) -> float:
         return 1
 
     def get_effects(self):
@@ -1036,40 +1064,37 @@ class NegotiateEvent(ActionableLifeEvent):
             Role("Other", other) : []
         }
 
-    def execute(self) -> None:
-        from speakeasy.negotiation.neighborly_classes import NegotiationState, NeighborlyNegotiator, negotiate
-        
+    def execute(self) -> None:    
         initiator = self["Initiator"]
         other = self["Other"]
 
         #run negotiation
-        negotiator = NeighborlyNegotiator( initiator.get_component(GameCharacter).full_name, initiator )
-        partner = NeighborlyNegotiator( other.get_component(GameCharacter).full_name, other )
-        state = NegotiationState(negotiator.agent, partner.agent, None)
-
-        negotiator.negotiation_state = state
-        partner.negotiation_state = state
-
-        options = negotiator.agent.generate_starting_possible_actions()
+        negotiator = NegotiateEvent.NeighborlyNegotiator( initiator.get_component(GameCharacter).full_name, initiator )
+        partner = NegotiateEvent.NeighborlyNegotiator( other.get_component(GameCharacter).full_name, other )
+        options = NegotiateEvent.get_initial_ask_options(negotiator.agent, partner.agent)
+        if len(options) < 1:
+            #print("Nothing to ask for.")
+            return
         thing_to_ask_for = random.choice(options)
-        state.setup_initial_ask(thing_to_ask_for)
+
         print(f'Running negotiation between {negotiator.name} and {partner.name}:')
-        agreement = negotiate(negotiator.agent, partner.agent, thing_to_ask_for)
+        print(f'{negotiator.name}:{negotiator.gameObject.get_component(Inventory).items}\n{partner.name}:{partner.gameObject.get_component(Inventory).items}')
+        agreement = NegotiateEvent.negotiate(negotiator.agent, partner.agent, thing_to_ask_for)
 
         #trigger each event from the agreed upon package
         for item in agreement:
             triggered_event = item.val
-            initiator.world.get_resource(LifeEventBuffer).append(triggered_event)
+            initiator.world.get_resource(AllEvents).append(triggered_event)
             triggered_event.execute()
 
             #add some mutual respect
-            get_relationship(initiator, other).get_component(Relationship).add_modifier(RelationshipModifier('Gained respect due to successful negotiation.', {Respect:1}))
-            get_relationship(other, initiator).get_component(Relationship).add_modifier(RelationshipModifier('Gained respect due to successful negotiation.', {Respect:1}))
+            get_relationship(initiator, other).get_component(Respect).increment(1)#add_modifier(RelationshipModifier('Gained respect due to successful negotiation.', {Respect:1}))
+            get_relationship(other, initiator).get_component(Respect).increment(1)#add_modifier(RelationshipModifier('Gained respect due to successful negotiation.', {Respect:1}))
 
         if len(agreement) == 0:
             #lose some mutual respect
-            get_relationship(initiator, other).get_component(Relationship).add_modifier(RelationshipModifier('Lost respect due to failed negotiation.', {Respect:-1}))
-            get_relationship(other, initiator).get_component(Relationship).add_modifier(RelationshipModifier('Lost respect due to failed negotiation.', {Respect:-1}))
+            get_relationship(initiator, other).get_component(Respect).increment(-1)#add_modifier(RelationshipModifier('Lost respect due to failed negotiation.', {Respect:-1}))
+            get_relationship(other, initiator).get_component(Respect).increment(-1)#add_modifier(RelationshipModifier('Lost respect due to failed negotiation.', {Respect:-1}))
 
     @staticmethod
     def _bind_initiator(
@@ -1102,16 +1127,11 @@ class NegotiateEvent(ActionableLifeEvent):
         respect_threshold = NEGOTIATE_EVENT_RESPECT_THRESHOLD
 
         if candidate:
-            if has_relationship(initiator, candidate) and has_relationship(
-                candidate, initiator
-            ):
-                candidates = [candidate]
-            else:
-                return None
+            candidates = [candidate]
         else:
             candidates = [
                 world.get_gameobject(c)
-                for c in initiator.get_component(RelationshipManager).targets()
+                for c in initiator.get_component(RelationshipManager).outgoing.keys()
             ]
 
         matches: List[GameObject] = []
@@ -1127,6 +1147,18 @@ class NegotiateEvent(ActionableLifeEvent):
             if outgoing_respect.get_value() < respect_threshold:
                 continue
 
+            #prereq: something to ask for
+            negotiator = NegotiateEvent.NeighborlyNegotiator( initiator.get_component(GameCharacter).full_name, initiator )
+            partner = NegotiateEvent.NeighborlyNegotiator( character.get_component(GameCharacter).full_name, character )
+            state = NegotiateEvent.NegotiationState(negotiator.agent, partner.agent, None)
+
+            negotiator.agent.negotiation_state = state
+            partner.agent.negotiation_state = state
+
+            options = negotiator.agent.generate_starting_possible_actions()
+            if len(options) < 1:
+                continue
+
             matches.append(character)
 
         if matches:
@@ -1139,8 +1171,12 @@ class NegotiateEvent(ActionableLifeEvent):
         cls,
         world: World,
         bindings: RoleList,
-    ) -> Optional[ActionableLifeEvent]:
-        
+    ) -> Optional[RandomLifeEvent]:
+        #make negotiation toggled in config
+        if not world.get_resource(NeighborlyConfig).settings.get('enable_negotiation', True):
+            print("Skipped Negotiation as it's disabled.")
+            return None
+
         initiator = cls._bind_initiator(world, bindings.get("Initiator"))
 
         if initiator is None:
@@ -1161,17 +1197,3 @@ plugin_info = PluginInfo(
     plugin_id="speakeasy.life-events",
     version="0.1.0",
 )
-
-def setup(sim: Neighborly, **kwargs: Any):
-    life_event_library = sim.world.get_resource(LifeEventLibrary)
-
-    life_event_library.add(TradeEvent)
-    life_event_library.add(GoodWordEvent)
-    life_event_library.add(TheftEvent)
-    life_event_library.add(HelpWithRivalGangEvent)
-    life_event_library.add(GiveEvent)
-    life_event_library.add(ExtortBusinessEvent)
-    life_event_library.add(TellAboutEvent)
-    life_event_library.add(LearnAboutEvent)
-    life_event_library.add(GenerateKnowledgeEvent)
-    life_event_library.add(NegotiateEvent)

@@ -4,9 +4,9 @@ from typing import Any, Dict, Optional, Union, Set, List
 from enum import Enum, auto
 
 from neighborly import Component
+from neighborly.core.ecs.ecs import GameObject
 from neighborly.core.relationship import RelationshipStatus, RelationshipFacet
-
-randy = random.Random()
+from neighborly.events import GiveBirthEvent 
 
 class Inventory(Component):
     """
@@ -34,8 +34,14 @@ class Inventory(Component):
             self.items: Dict[str, int] = {**items}
         else:
             self.items = {}
-            for i in range(randy.randint(4,7)):
-                self.add_item(randy.choice(['booze','wheat','money']), 1)
+
+    """def set_gameobject(self, gameobject: GameObject | None) -> None:
+        super().set_gameobject(gameobject)
+        print("registering on birth callback for inventory")
+        self.gameobject.on(GiveBirthEvent, self.give_items_on_birth)"""
+
+    def give_items_on_birth(self, gameobject, birth_event):
+        print(f"give some items to child {gameobject} upon birth event {birth_event}")
 
     def add_item(self, item: str, quantity: int) -> None:
         """Add a quantity of an item to the inventory"""
@@ -157,9 +163,14 @@ class Ethnicity(Component):
             ethnicity if isinstance(ethnicity, EthnicityValue) \
             else EthnicityValue[ethnicity]
         
-        if self.ethnicity == EthnicityValue.NotSpecified:
-            i = randy.randint(0, len(list(EthnicityValue))-1)
-            self.ethnicity = list(EthnicityValue)[i]
+    """def set_gameobject(self, gameobject: GameObject | None) -> None:
+        super().set_gameobject(gameobject)
+        #parents should pass down ethnicity
+        print("registering birth callback for ethnicity")
+        self.gameobject.on(GiveBirthEvent, self.pass_ethnicity_on_birth)"""
+
+    def pass_ethnicity_on_birth(self, gameobject, birth_event):
+        print(f"Pass down ethnicity to child {gameobject} upon birth event: {birth_event}")
 
     def to_dict(self) -> Dict[str, Any]:
         return {

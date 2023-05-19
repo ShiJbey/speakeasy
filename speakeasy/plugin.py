@@ -4,11 +4,13 @@ from typing import Any
 
 from neighborly.simulation import PluginInfo, Neighborly
 from neighborly.loaders import load_prefab, load_data_file, load_occupation_types
+from neighborly.plugins.defaults import names
 
 from speakeasy import VERSION
 import speakeasy.components
 import speakeasy.systems
 import speakeasy.social_rules
+from speakeasy.event_listeners import register_event_listeners
 
 _RESOURCES_DIR = pathlib.Path(os.path.abspath(__file__)).parent / "data"
 
@@ -33,24 +35,20 @@ def setup(sim: Neighborly, **kwargs: Any) -> None:
     sim.register_component(speakeasy.components.Respect)
 
     # Add systems
+    sim.add_system(speakeasy.systems.InitialInventorySystem())
+    sim.add_system(speakeasy.systems.InitialEthnicitySystem())
+    sim.add_system(speakeasy.systems.ProbeRelationshipSystem())
     sim.add_system(speakeasy.systems.ProduceItemsSystem())
     sim.add_system(speakeasy.systems.GenerateSelfKnowledgeSystem())
-
-    # Add social rules
-    sim.add_social_rule(speakeasy.social_rules.respect_same_ethnicity)
-    sim.add_social_rule(speakeasy.social_rules.disrespect_different_ethnicity)
-    sim.add_social_rule(speakeasy.social_rules.respect_same_faction)
-    sim.add_social_rule(speakeasy.social_rules.respect_for_family)
-    sim.add_social_rule(speakeasy.social_rules.romance_boost_from_shared_virtues)
-    sim.add_social_rule(speakeasy.social_rules.romance_loss_from_virtue_conflicts)
-    sim.add_social_rule(speakeasy.social_rules.friendship_virtue_compatibility)
-
-    #add events
-    speakeasy.events.setup(sim)
 
     #load prefabs and content
     load_prefab(_RESOURCES_DIR / "character.default.with-inventory.yaml")
     load_prefab(_RESOURCES_DIR / "business.default.with-produces.yaml")
     load_prefab(_RESOURCES_DIR / "town.default.with-ethnicity.yaml")
-    load_data_file(sim, _RESOURCES_DIR / "businesses.yaml")
-    load_occupation_types(sim.world, _RESOURCES_DIR / "occupation_types.yaml")
+    load_data_file(_RESOURCES_DIR / "businesses.yaml")
+    load_occupation_types(_RESOURCES_DIR / "occupation_types.yaml")
+
+    #event listeners
+    register_event_listeners()
+    
+    names.setup(sim, **kwargs)
