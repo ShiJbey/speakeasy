@@ -40,6 +40,7 @@ class Agent:
     self.utilities[list(self.utilities.keys())[idx]] = val
     self.ActionToAskFor = Action(chr(ord('A') + idx))
     self.parent = None
+    self.negotiation_state = None
 
   # naive evaluation = random dictionary lookup
   def evaluate_action(self, action: Action):
@@ -68,7 +69,7 @@ class Agent:
     #  return counterOffers
     
     # naive: Don't continue building if not needed for own utility TODO: parameterize as Greed ? 
-    if (self.evaluate_offer(counterOfferSoFar) >= offerUtilityNeeded):
+    if (self.evaluate_offer(counterOfferSoFar) > offerUtilityNeeded): #changed to must exceed needed, bc of case where needed = 0
       # TODO: doesnt work bc initial offer isn't included, see: print('appending current offer: ', offers_to_string([counterOfferSoFar]), ', rejected offers: ', offers_to_string(rejectedOffers))
       if (counterOfferSoFar not in rejectedOffers):
         counterOffers.append(counterOfferSoFar)
@@ -97,29 +98,28 @@ class Agent:
     return counterOffers
   
   # return tuple (responseCategory, counterOffers)
-  def respond_to_offer(self, offers: list, rejectedOffers: list, number_of_options: int = 2):
+  def respond_to_offer(self, offer: NegotiationOffer, rejectedOffers: list, number_of_options: int = 2):
     counterOffers = []
 		
-    # Naive Order: First come first sercve.
-    for offer in offers:
-      currentOfferUtility = self.evaluate_offer(offer); # Evaluate what they're asking for. 
-			
-      if (currentOfferUtility >= 0): #TODO: parameterize willingness to perform neutral acts. aka Selfishness<->Benevolence? 
-        counterOffers = [ offer ]
-        return (ResponseCategory.ACCEPT, counterOffers)
+    # Naive Order: First come first serve.
+    currentOfferUtility = self.evaluate_offer(offer); # Evaluate what they're asking for. 
+    
+    if (currentOfferUtility > 0): #TODO: parameterize willingness to perform neutral acts. aka Selfishness<->Benevolence? 
+      counterOffers = [ offer ]
+      return (ResponseCategory.ACCEPT, counterOffers)
 
-      counterOffers = self.generate_counter_offers(-currentOfferUtility, offer, rejectedOffers) #.Except(rejectedOffersSoFar)
-      counterOffers = [o for o in counterOffers if o not in rejectedOffers]
-      counterOffers = counterOffers[:number_of_options]
+    counterOffers = self.generate_counter_offers(-currentOfferUtility, offer, rejectedOffers) #.Except(rejectedOffersSoFar)
+    counterOffers = [o for o in counterOffers if o not in rejectedOffers]
+    counterOffers = counterOffers[:number_of_options]
 
-      if (len(counterOffers) > 0):
-        return (ResponseCategory.COUNTER, counterOffers)
-			
-			#try to compensate with Gratitude?
-			
-			#try to compensate with Money?
-			
-			#try to compensate with Reciprocal Action?
+    if (len(counterOffers) > 0):
+      return (ResponseCategory.COUNTER, counterOffers)
+    
+    #try to compensate with Gratitude?
+    
+    #try to compensate with Money?
+    
+    #try to compensate with Reciprocal Action?
 		
     return (ResponseCategory.REJECT, counterOffers)
 
@@ -137,7 +137,7 @@ class NegotiationState:
     self.rejectedOffers = []
     self.lastResult = ResponseCategory.COUNTER
     self.lastCountered = []
-    self.currentAgentIndex = 1
+    self.currentAgentIndex = 2
     
     #containers for exchanged actions
     self.to_agent1 = []
@@ -158,58 +158,66 @@ class NegotiationState:
       return self.agent1
     return None
 
-def print_negotiation_trace(agent1, agent2, initialAsk):
+def get_initial_ask_options(agent1 : Agent, agent2 : Agent):
+  state = NegotiationState(agent1, agent2, None)
+  agent1.negotiation_state = state
+  agent2.negotiation_state = state
+  return agent1.generate_starting_possible_actions()
+
+def print_negotiation_trace(agent1 : Agent, agent2 : Agent, initialAsk):
     #agent1 = Agent()
     #agent2 = Agent()
+    state : NegotiationState = agent1.negotiation_state
+    
 		
 		#Negotiation Protocol
-    #initialAsk = agent1.ActionToAskFor
-    initialOffer = [ initialAsk ]
-    currentOffers = [ initialOffer ]
-    rejectedOffers = []
+    state.setup_initial_ask(initialAsk)
 		
     print("Negotiation Begins")
     print("==================")
-    print(f"Agent 1 opens by asking Agent 2 for {offers_to_string(currentOffers)}. ", end =" ")
-    currentAgentIndex = 2
-    lastResult = ResponseCategory.COUNTER
+    print(f"Agent 1 opens by asking Agent 2 for {offers_to_string(state.currentOffers)}. ", end =" ")
 		
     actionsDiscussed = []
 		
-    while lastResult == ResponseCategory.COUNTER:
-      for offer in currentOffers:
+    while state.lastResult == ResponseCategory.COUNTER:
+      for offer in state.currentOffers:
         print(f"[{agent1.evaluate_offer(offer)}:{agent2.evaluate_offer(offer)}] ", end =" ")
         actionsDiscussed += offer
       
       print()
 			
-      currentAgent = agent1 if currentAgentIndex == 1 else agent2
+      state.currentAgent = agent1 if state.currentAgentIndex == 1 else agent2
       counterOffers = []
-      (lastResult, counterOffers) = currentAgent.respond_to_offer(currentOffers, rejectedOffers);
+      for currentOfferIndex, currentOffer in enumerate(state.currentOffers):
+        if currentOfferIndex > 0 and state.lastResult != ResponseCategory.REJECT:
+          continue
+        (state.lastResult, counterOffers) = state.currentAgent.respond_to_offer(currentOffer, state.rejectedOffers)
 			
-      rejectedOffers += currentOffers
+      state.rejectedOffers += state.currentOffers
 			
-      if lastResult == ResponseCategory.COUNTER:
-        print(f"Agent {currentAgentIndex} counters with {offers_to_string(counterOffers)}. ", end = ' ')
-        currentOffers = counterOffers
-      elif lastResult == ResponseCategory.ACCEPT: 
-        print(f"Agent {currentAgentIndex} accepts {offers_to_string(counterOffers)}. ", end = ' ')
-        currentOffers = counterOffers
+      if state.lastResult == ResponseCategory.COUNTER:
+        print(f"Agent {state.currentAgentIndex} counters with {offers_to_string(counterOffers)}. ", end = ' ')
+        state.currentOffers = counterOffers
+      elif state.lastResult == ResponseCategory.ACCEPT: 
+        print(f"Agent {state.currentAgentIndex} accepts {offers_to_string(counterOffers)}. ", end = ' ')
+        state.currentOffers = counterOffers
 
-        for offer in currentOffers:
+        for offer in state.currentOffers:
           print(f"[{agent1.evaluate_offer(offer)}:{agent2.evaluate_offer(offer)}] ")
 
-      elif lastResult == ResponseCategory.REJECT: 
-        print(f"Agent {currentAgentIndex} rejects. ")
+      elif state.lastResult == ResponseCategory.REJECT: 
+        print(f"Agent {state.currentAgentIndex} rejects. ")
 				
-      currentAgentIndex = 2 if currentAgentIndex == 1 else 1
+      state.currentAgentIndex = 2 if state.currentAgentIndex == 1 else 1
 		
     print("==================")
 		
     for a in actionsDiscussed:
       print(f"[{a.val} => {agent1.evaluate_action(a)}:{agent2.evaluate_action(a)}]")
 
-    return (lastResult, currentOffers)
+    agent1.negotiation_state = state
+    agent2.negotiation_state = state
+    return (state.lastResult, state.currentOffers)
 
 if __name__ == "__main__":
   agent1 = Agent()
