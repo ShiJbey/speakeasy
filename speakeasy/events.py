@@ -13,7 +13,7 @@ from neighborly.core.ecs import GameObject, World, Active
 from neighborly.core.time import SimDateTime
 from neighborly.components.shared import Name
 from neighborly.core.roles import Role, RoleList
-from neighborly.core.life_event import RandomLifeEvent, AllEvents
+from neighborly.core.life_event import RandomLifeEvent, AllEvents, EventHistory
 from neighborly.core.relationship import RelationshipFacet, Relationship, RelationshipModifier, RelationshipManager
 from neighborly.core.relationship import (
     get_relationship,
@@ -214,6 +214,9 @@ class TradeEvent(RandomLifeEvent):
         get_relationship(initiator, other).get_component(Respect).increment(1)#.get_component(Relationship).add_modifier(RelationshipModifier('Gained respect due to trade.', {Respect:1}))
         get_relationship(other, initiator).get_component(Respect).increment(1)#.add_modifier(RelationshipModifier('Gained respect due to trade.', {Respect:1}))
 
+        if event_history := initiator.try_component(EventHistory):
+            event_history.append(self)
+
     @staticmethod
     def _bind_initiator(
         world: World, candidate: Optional[GameObject] = None
@@ -390,6 +393,9 @@ class GoodWordEvent(RandomLifeEvent):
         #print(f"{initiator.name} puts in a good word with {other.name} about {subject.name}, bringing total favors owed by {subject.name} to {initiator.name} to: {favors_sub_owes_init_DISCOURAGING}")
         #print(f"After, SUB now owes INIT: {favors_sub_owes_init_DISCOURAGING} + 1, and INIT ALREADY OWED SUB {favors_init_owed_sub_ENCOURAGING} (-1)?")
 
+        if event_history := initiator.try_component(EventHistory):
+            event_history.append(self)
+
     @staticmethod
     def _bind_initiator(
         world: World, candidate: Optional[GameObject] = None
@@ -551,6 +557,9 @@ class TellAboutEvent(RandomLifeEvent):
         #add some respect
         get_relationship(initiator, subject).get_component(Respect).increment(1)#.add_modifier(RelationshipModifier('Gained respect due to getting information.', {Respect:1}))
 
+        if event_history := initiator.try_component(EventHistory):
+            event_history.append(self)
+
     @staticmethod
     def _bind_initiator(
         world: World, candidate: Optional[GameObject] = None
@@ -703,6 +712,9 @@ class TheftEvent(RandomLifeEvent):
 
             #lose some respect
             get_relationship(others_owner, initiator).get_component(Respect).increment(-3)#.add_modifier(RelationshipModifier('Lost respect due to theft.', {Respect:-3}))
+
+        if event_history := initiator.try_component(EventHistory):
+            event_history.append(self)
 
     @staticmethod
     def _bind_initiator(
@@ -912,6 +924,9 @@ class HelpWithRivalGangEvent(RandomLifeEvent):
         #add a favor
         get_relationship(other, initiator).get_component(Favors).favors += 1#.add_modifier(RelationshipModifier('Owe a Favors due to getting help with a rival gang.', {Favors:1}))
 
+        if event_history := initiator.try_component(EventHistory):
+            event_history.append(self)
+
     @staticmethod
     def _bind_initiator(
         world: World, candidate: Optional[GameObject] = None
@@ -1095,6 +1110,9 @@ class NegotiateEvent(RandomLifeEvent):
             #lose some mutual respect
             get_relationship(initiator, other).get_component(Respect).increment(-1)#add_modifier(RelationshipModifier('Lost respect due to failed negotiation.', {Respect:-1}))
             get_relationship(other, initiator).get_component(Respect).increment(-1)#add_modifier(RelationshipModifier('Lost respect due to failed negotiation.', {Respect:-1}))
+
+        if event_history := initiator.try_component(EventHistory):
+            event_history.append(self)
 
     @staticmethod
     def _bind_initiator(
