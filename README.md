@@ -4,13 +4,29 @@
 town built with [Neighborly](https://github.com/ShiJbey/neighborly). The theme for this simulation
 was inspired by games like *City of Gangsters* and *Empire of Sin*.
 
-## Installing dependencies
-
-This simulation requires [Neighborly](https://github.com/ShiJbey/neighborly) to run. You can install
-it by running the following command.
+## Setup local for local development
 
 ```bash
-pip install git+https://github.com/ShiJbey/neighborly.git
+# Step 1: Clone repo and change into the project directory
+git clone https://github.com/ShiJbey/speakeasy
+cd speakeasy
+
+# Step 2: Create a Python virtual environment to manage dependencies
+python -m venv venv
+
+# Step 3 (MacOS & Linux): Activate the virtual environment
+source ./venv/bin/activate
+
+# Step 3 (Windows Powershell): Activate the virtual environment
+.\venv\Scripts\Activate.ps1
+
+# Step 4: Install speakeasy as an editable install and install dependencies
+python -m pip install -e ".[development]"
+
+# Step 5: Test installation
+python
+
+>>> import speakeasy
 ```
 
 ## Running the simulation
