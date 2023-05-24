@@ -39,7 +39,6 @@ def setup(sim: Neighborly, **kwargs: Any) -> None:
     sim.add_system(speakeasy.systems.InitialEthnicitySystem())
     sim.add_system(speakeasy.systems.ProbeRelationshipSystem())
     sim.add_system(speakeasy.systems.ProduceItemsSystem())
-    sim.add_system(speakeasy.systems.GenerateSelfKnowledgeSystem())
 
     #load prefabs and content
     load_prefab(_RESOURCES_DIR / "character.default.with-inventory.yaml")

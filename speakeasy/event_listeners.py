@@ -1,11 +1,14 @@
 import random
 from neighborly import GameObject
-from neighborly.events import GiveBirthEvent, JoinSettlementEvent
+from neighborly.events import GiveBirthEvent, JoinSettlementEvent, StartJobEvent
 from neighborly.core.ecs import Active
+from neighborly.core.life_event import RandomLifeEvent, EventHistory
 from neighborly.components import InTheWorkforce, LifeStage, Occupation, Unemployed
 from neighborly.components.character import LifeStageType
 
-from speakeasy.components import Inventory, Ethnicity, EthnicityValue
+from speakeasy.events import NegotiateEvent, TradeEvent, GoodWordEvent, TellAboutEvent, TheftEvent, HelpWithRivalGangEvent
+
+from speakeasy.components import Inventory, Ethnicity, EthnicityValue, Knowledge, Produces
 
 def on_adult_join_settlement(
     gameobject: GameObject, event: JoinSettlementEvent
@@ -37,7 +40,15 @@ def on_birth(gameobject: GameObject, event: GiveBirthEvent) -> None:
         baby_ethnicity = event.baby.get_component(Ethnicity)
         baby_ethnicity.ethnicity = event.birthing_parent.world.get_resource(random.Random).choice([event.birthing_parent.get_component(Ethnicity).ethnicity, event.other_parent.get_component(Ethnicity).ethnicity])
 
+def gain_knowledge_of_employer_business(gameobject: GameObject, event: RandomLifeEvent) -> None:
+    if (gameobject == event.character):
+        if knowledge := gameobject.try_component(Knowledge):
+            for item in event.business.get_component(Produces).produces:
+                knowledge.add_producer(event.business._id, item)
+            for item in event.business.get_component(Produces).requires:
+                knowledge.add_buyer(event.business._id, item)
+
 def register_event_listeners():
     GameObject.on(GiveBirthEvent, on_birth)
     GameObject.on(JoinSettlementEvent, on_adult_join_settlement)
-
+    GameObject.on(StartJobEvent, gain_knowledge_of_employer_business)
