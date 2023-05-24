@@ -22,7 +22,7 @@ from neighborly.core.relationship import (
 )
 from neighborly.decorators import random_life_event
 
-from speakeasy.negotiation.core import NegotiationState
+from speakeasy.negotiation.core import NegotiationState, print_negotiation_trace, ResponseCategory
 
 ############
 # TODO: remove placeholders for new stuff
@@ -1056,7 +1056,7 @@ class GenerateKnowledgeEvent(RandomLifeEvent):
 
 @random_life_event()
 class NegotiateEvent(RandomLifeEvent):
-    from speakeasy.negotiation.core import get_initial_ask_options
+    from speakeasy.negotiation.core import get_initial_ask_options, NegotiationState
     from speakeasy.negotiation.neighborly_classes import NeighborlyNegotiator
 
 
