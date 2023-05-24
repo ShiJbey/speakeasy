@@ -1,6 +1,5 @@
 import random
-from typing import List, Optional
-
+from typing import Any, Dict, Generator, List, Optional, Tuple
 from neighborly.components.business import (
     Business,
     BusinessOwner,
@@ -15,14 +14,12 @@ from neighborly.core.time import SimDateTime
 from neighborly.components.shared import Name
 from neighborly.core.roles import Role, RoleList
 from neighborly.core.life_event import RandomLifeEvent, AllEvents, EventHistory
-from neighborly.core.relationship import RelationshipFacet, Relationship, RelationshipManager
+from neighborly.core.relationship import RelationshipFacet, Relationship, RelationshipModifier, RelationshipManager
 from neighborly.core.relationship import (
     get_relationship,
     get_relationships_with_statuses
 )
 from neighborly.decorators import random_life_event
-
-from speakeasy.negotiation.core import NegotiationState
 
 ############
 # TODO: remove placeholders for new stuff
@@ -38,11 +35,11 @@ from speakeasy.components import Inventory, Knowledge, Respect, Favors, Produces
 
 # Classes for the different effects map entries
 class GainItemEffect:
-    def __init__(self, item: str) -> None:
+    def __init__(self, item) -> None:
         self.item = item
 
 class LoseItemEffect:
-    def __init__(self, item: str) -> None:
+    def __init__(self, item) -> None:
         self.item = item
 
 class GainRelationshipEffect:
@@ -56,7 +53,7 @@ class LoseRelationshipEffect:
         self.facet = facet
 
 class GainKnowledgeEffect:
-    def __init__(self, item: str) -> None:
+    def __init__(self, item) -> None:
         self.item = item
 
 class TriggerEventEffect:
@@ -89,7 +86,7 @@ def get_associated_business(obj : GameObject) -> Business:
 
     if bizown:
         associated_biz = obj.world.get_gameobject(bizown.business).get_component(Business)
-
+    
     return associated_biz
 
 #learning that someone's biz produces an item
@@ -106,7 +103,7 @@ class LearnAboutEvent(RandomLifeEvent):
 
     def get_priority(self) -> float:
         return 1
-
+    
     def get_probability(self) -> float:
         return 1
 
@@ -149,7 +146,7 @@ class LearnAboutEvent(RandomLifeEvent):
 
             if candidate_biz not in initiator_knowledge.produces[candidate_item]:
                 return candidate
-
+            
         return None
 
 
@@ -302,7 +299,7 @@ class TradeEvent(RandomLifeEvent):
             initiators_biz = get_associated_business(initiator)
             characters_inv = character.get_component(Inventory)
 
-            needed_item = needs_item_from(initiators_biz, characters_inv, world.get_resource(random.Random))
+            needed_item = needs_item_from(initiators_biz, characters_inv, world.get_resource(random.Random)) 
             if needed_item is None:
                 #print('init needs nothing from other?')
                 continue
@@ -348,7 +345,7 @@ class TradeEvent(RandomLifeEvent):
 
         other, o_item = other_tup
         return cls(world.get_resource(SimDateTime), initiator, other, i_item, o_item)
-
+    
     def __str__(self) -> str:
         return f"{super().__str__()}, i_item={str(self.initiators_item)}, o_item={str(self.others_item)}"
 
@@ -364,7 +361,7 @@ class GoodWordEvent(RandomLifeEvent):
 
     def get_priority(self) -> float:
         return 1
-
+    
     def get_probability(self) -> float:
         return 1
 
@@ -386,7 +383,7 @@ class GoodWordEvent(RandomLifeEvent):
         favors_sub_owes_init_DISCOURAGING = get_relationship(subject, initiator).get_component(Favors).favors
         favors_init_owed_sub_ENCOURAGING = get_relationship(initiator, subject).get_component(Favors).favors
         #print(f"Prior, SUB now owes INIT: {favors_sub_owes_init_DISCOURAGING} + 1, and INIT ALREADY OWED SUB {favors_init_owed_sub_ENCOURAGING} (-1)?")
-
+        
         #add some respect
         get_relationship(other, subject).get_component(Respect).increment(1)#add_modifier(RelationshipModifier('Gained respect due to good word.', {Respect:1}))
 
@@ -531,7 +528,7 @@ class TellAboutEvent(RandomLifeEvent):
 
     def get_priority(self) -> float:
         return 1
-
+    
     def get_probability(self) -> float:
         return 1
 
@@ -606,16 +603,16 @@ class TellAboutEvent(RandomLifeEvent):
             for character in all_candidates:
                 respect = get_relationship(initiator, character).get_component(Respect)
                 if respect.get_value() >= respect_threshold:
-                    candidates.append(character)
+                    candidates.append(character)     
 
         matches: List[GameObject] = []
 
         for character in candidates:
              if character.has_component(Knowledge):
-
+                
                 #prepreq: initiator must know new business for other
                 other_knowledge = character.get_component(Knowledge)
-
+                
                 known_businesses = initiator.get_component(Knowledge).known_producers()
                 other_known_businesses = other_knowledge.known_producers()
 
@@ -687,7 +684,7 @@ class TheftEvent(RandomLifeEvent):
 
     def get_priority(self) -> float:
         return 1
-
+    
     def get_probability(self) -> float:
         return 1
 
@@ -737,7 +734,7 @@ class TheftEvent(RandomLifeEvent):
             ]
 
         matches = []
-
+        
         #initiator must disrespect someonethey know
         for candidate in candidates:
 
@@ -788,7 +785,7 @@ class TheftEvent(RandomLifeEvent):
             return None
 
         return cls(world.get_resource(SimDateTime), initiator, other)
-
+    
     def __str__(self) -> str:
         return f"{super().__str__()}"
 
@@ -802,37 +799,36 @@ class GiveEvent(RandomLifeEvent):
     initiator = "Initiator"
 
     def __init__(
-        self, date: SimDateTime, initiator: GameObject, other: GameObject, item: GameObject
+        self, date: SimDateTime, initiator: GameObject, other: GameObject, item: str
     ) -> None:
-        super().__init__(date, [Role("Initiator", initiator), Role("Other", other), Role("Item", item)])
+        self.item = item
+        super().__init__(date, [Role("Initiator", initiator), Role("Other", other), Role(f"Item: {item}", None)])
 
     def get_priority(self) -> float:
         return 1
-
+    
     def get_probability(self) -> float:
         return 1
 
     def get_effects(self):
         initiator = self["Initiator"]
         other = self["Other"]
-        item = self["Item"]
 
         return {
-            Role("Initiator", initiator) : [LoseItemEffect(item.get_component(Name).value)],
-            Role("Other", other)  : [GainItemEffect(item.get_component(Name).value)]
+            Role("Initiator", initiator) : [LoseItemEffect(self.item)],
+            Role("Other", other)  : [GainItemEffect(self.item)]
         }
 
     def execute(self) -> None:
         initiator = self["Initiator"]
         other = self["Other"]
-        item = self["Item"].get_component(Name).value
 
         #move item between inventories
         initiators_inventory = initiator.get_component(Inventory)
         others_inventory = other.get_component(Inventory)
 
-        initiators_inventory.remove_item(item, 1)
-        others_inventory.add_item(item, 1)
+        initiators_inventory.remove_item(self.item, 1)
+        others_inventory.add_item(self.item, 1)
 
 
     @staticmethod
@@ -850,21 +846,21 @@ class GiveEvent(RandomLifeEvent):
     def _bind_other(
         world: World, initiator: GameObject, candidate: Optional[GameObject] = None
     ) -> Optional[GameObject]:
-
+        
         if candidate and candidate != initiator:
             if candidate.has_component(Inventory):
                 return candidate
             return None
         else:
             return None
-
+    
     def _bind_item(
         world: World, initiator: Optional[GameObject] = None, other: Optional[GameObject] = None
     ) -> Optional[GameObject]:
-
+        
         if initiator and other:
             initiator_inventory = initiator.get_component(Inventory)
-            candidates = [world.spawn_gameobject([Name(item)], item) for item in list(initiator_inventory.items)] #needed to spawn to put item in role list but, creates waste?
+            candidates = [item for item in list(initiator_inventory.items)] #needed to spawn to put item in role list but, creates waste?
             if len(candidates) < 1:
                 return None
             return world.get_resource(random.Random).choice(candidates)
@@ -889,15 +885,15 @@ class GiveEvent(RandomLifeEvent):
         if other is None:
             #print("give failed on other")
             return None
-
+        
         item = cls._bind_item(world, initiator, other)
 
         if item is None:
             #print("give failed on item")
             return None
-
+        
         return cls(world.get_resource(SimDateTime), initiator, other, item)
-
+    
 @random_life_event()
 class HelpWithRivalGangEvent(RandomLifeEvent):
 
@@ -910,7 +906,7 @@ class HelpWithRivalGangEvent(RandomLifeEvent):
 
     def get_priority(self) -> float:
         return 1
-
+    
     def get_probability(self) -> float:
         return 1
 
@@ -949,9 +945,9 @@ class HelpWithRivalGangEvent(RandomLifeEvent):
     def _bind_other(
         world: World, initiator: GameObject, candidate: Optional[GameObject] = None
     ) -> Optional[GameObject]:
-
+        
         respect_threshold = HELP_EVENT_RESPECT_THRESHOLD
-
+        
         if candidate:
             candidates = [candidate]
         else:
@@ -991,7 +987,7 @@ class HelpWithRivalGangEvent(RandomLifeEvent):
             return None
 
         return cls(world.get_resource(SimDateTime), initiator, other)
-
+    
     def __str__(self) -> str:
         return f"{super().__str__()}"
 
@@ -1009,10 +1005,10 @@ class GenerateKnowledgeEvent(RandomLifeEvent):
 
     def get_effects(self):
         return {}
-
+    
     def get_probability(self) -> float:
         return 1
-
+    
     def execute(self) -> None:
         initiator = self["Initiator"]
 
@@ -1043,9 +1039,9 @@ class GenerateKnowledgeEvent(RandomLifeEvent):
 
         if matches:
             world.get_resource(random.Random).choice(matches)
-
+        
         return None
-
+    
     @classmethod
     def instantiate(
         cls,
@@ -1062,9 +1058,8 @@ class GenerateKnowledgeEvent(RandomLifeEvent):
 
 @random_life_event()
 class NegotiateEvent(RandomLifeEvent):
-    from speakeasy.negotiation.core import get_initial_ask_options
+    from speakeasy.negotiation.core import get_initial_ask_options, negotiate
     from speakeasy.negotiation.neighborly_classes import NeighborlyNegotiator
-
 
     initiator = "Initiator"
 
@@ -1075,7 +1070,7 @@ class NegotiateEvent(RandomLifeEvent):
 
     def get_priority(self) -> float:
         return 1
-
+    
     def get_probability(self) -> float:
         return 1
 
@@ -1088,24 +1083,22 @@ class NegotiateEvent(RandomLifeEvent):
             Role("Other", other) : [GainRelationshipEffect(get_relationship(initiator, other)), GainRelationshipEffect(get_relationship(other, initiator))]
         }
 
-    def execute(self) -> None:
+    def execute(self) -> None:    
         initiator = self["Initiator"]
         other = self["Other"]
 
         #run negotiation
-        negotiator = NegotiateEvent.NeighborlyNegotiator( initiator.get_component(GameCharacter).full_name, initiator )
-        partner = NegotiateEvent.NeighborlyNegotiator( other.get_component(GameCharacter).full_name, other )
-        options = NegotiateEvent.get_initial_ask_options(negotiator.agent, partner.agent)
+        negotiator = NegotiateEvent.NeighborlyNegotiator( initiator.get_component(GameCharacter).full_name, initiator , initiator.world.get_resource(random.Random))
+        partner = NegotiateEvent.NeighborlyNegotiator( other.get_component(GameCharacter).full_name, other, initiator.world.get_resource(random.Random) )
+        options = NegotiateEvent.get_initial_ask_options(negotiator, partner)
         if len(options) < 1:
             #print("Nothing to ask for.")
             return
-
-
         thing_to_ask_for = initiator.world.get_resource(random.Random).choice(options)
 
         print(f'Running negotiation between {negotiator.name} and {partner.name}:')
         print(f'{negotiator.name}:{negotiator.gameObject.get_component(Inventory).items}\n{partner.name}:{partner.gameObject.get_component(Inventory).items}')
-        agreement = NegotiateEvent.negotiate(negotiator.agent, partner.agent, thing_to_ask_for)
+        agreement = NegotiateEvent.negotiate(negotiator, partner, thing_to_ask_for)
 
         #trigger each event from the agreed upon package
         for item in agreement:
@@ -1177,14 +1170,9 @@ class NegotiateEvent(RandomLifeEvent):
                 continue
 
             #prereq: something to ask for
-            negotiator = NegotiateEvent.NeighborlyNegotiator( initiator.get_component(GameCharacter).full_name, initiator )
-            partner = NegotiateEvent.NeighborlyNegotiator( character.get_component(GameCharacter).full_name, character )
-            state = NegotiateEvent.NegotiationState(negotiator.agent, partner.agent, None)
-
-            negotiator.agent.negotiation_state = state
-            partner.agent.negotiation_state = state
-
-            options = negotiator.agent.generate_starting_possible_actions()
+            negotiator = NegotiateEvent.NeighborlyNegotiator( initiator.get_component(GameCharacter).full_name, initiator, initiator.world.get_resource(random.Random))
+            partner = NegotiateEvent.NeighborlyNegotiator( character.get_component(GameCharacter).full_name, character, initiator.world.get_resource(random.Random))
+            options = NegotiateEvent.get_initial_ask_options(negotiator, partner)
             if len(options) < 1:
                 continue
 
@@ -1210,21 +1198,13 @@ class NegotiateEvent(RandomLifeEvent):
 
         if initiator is None:
             return None
-
+        
         other = cls._bind_other(world, initiator, bindings.get("Other"))
 
         if other is None:
             return None
-
+        
         return cls(world.get_resource(SimDateTime), initiator, other)
-
-    @staticmethod
-    def negotiate(agent1, agent2, thing_to_ask_for):
-        result = print_negotiation_trace(agent1, agent2, thing_to_ask_for)
-        if result[0] == ResponseCategory.ACCEPT:
-            return result[1][0]
-        else:
-            return[]
-
+    
     def __str__(self) -> str:
         return f"{super().__str__()}"

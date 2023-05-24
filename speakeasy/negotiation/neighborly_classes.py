@@ -64,53 +64,53 @@ def check_item_possibility(self_object, other_object, offers_so_far, potential_a
             return False
 
     return True
-class NeighborlyNegotiator():
-    def __init__(self, name: str, game_object : GameObject) -> None:
+class NeighborlyNegotiator(Agent):
+    def __init__(self, name: str, game_object : GameObject, seeded_random) -> None:
+        super().__init__(seeded_random)
         self.name = name
         self.gameObject = game_object
-        self.agent = Agent()
         #overload the negotiation functions
-        self.agent.evaluate_action = types.MethodType(self.evaluate_action_ov, self)
-        self.agent.generate_starting_possible_actions = types.MethodType(self.generate_starting_possible_actions_ov, self)
-        self.agent.parent = self
+        #self.agent.evaluate_action = types.MethodType(self.evaluate_action_ov, self)
+        #self.agent.generate_starting_possible_actions = types.MethodType(self.generate_starting_possible_actions_ov, self)
+        #self.agent.parent = self
 
-    def generate_starting_possible_actions_ov(self, old_self) -> 'list[Action]':
+    def generate_starting_possible_actions(self) -> 'list[Action]':
         possible_actions: List[Action] = []
-        partner : NeighborlyNegotiator = self.agent.negotiation_state.get_partner(self.agent).parent
+        partner : NeighborlyNegotiator = self.negotiation_state.get_partner(self)
 
         #print(f'enumerating actions for {self.gameObject.get_component(GameCharacter).first_name}')
 
         for action in supported_actions:
             if action in [GiveEvent, TradeEvent]:
                 if event := action.instantiate(self.gameObject.world, RoleList([Role("Initiator", self.gameObject), Role("Other", partner.gameObject)])):
-                    if check_item_possibility(self.gameObject, partner.gameObject, self.agent.negotiation_state.currentOffers, Action(event)):
+                    if check_item_possibility(self.gameObject, partner.gameObject, self.negotiation_state.currentOffers, Action(event)):
                         possible_actions.append(Action(event))
-                        #print(f'they can ask for {action.__name__}: {self.agent.evaluate_action(Action(event))}')
+                        #print(f'they can ask for {action.__name__}: {self.evaluate_action(Action(event))}')
                 if event := action.instantiate(self.gameObject.world, RoleList([Role("Initiator", partner.gameObject), Role("Other", self.gameObject)])):
-                    if check_item_possibility(self.gameObject, partner.gameObject, self.agent.negotiation_state.currentOffers, Action(event)):
+                    if check_item_possibility(self.gameObject, partner.gameObject, self.negotiation_state.currentOffers, Action(event)):
                         possible_actions.append(Action(event))
-                        #print(f'they can ask for {action.__name__}: {self.agent.evaluate_action(Action(event))}')
+                        #print(f'they can ask for {action.__name__}: {self.evaluate_action(Action(event))}')
 
             if action in [GoodWordEvent]:
                 if event := action.instantiate(self.gameObject.world, RoleList([Role("Initiator", partner.gameObject), Role("Subject", self.gameObject), Role("Other", None)])):
                     possible_actions.append(Action(event))
-                    #print(f'they can ask for {action.__name__}: {self.agent.evaluate_action(Action(event))}')
+                    #print(f'they can ask for {action.__name__}: {self.evaluate_action(Action(event))}')
             if action in [TellAboutEvent]:
                 if event := action.instantiate(self.gameObject.world, RoleList([Role("Initiator", partner.gameObject), Role("Subject", self.gameObject), Role("Other", None)])):
                     possible_actions.append(Action(event))
-                    #print(f'they can ask for {action.__name__}: {self.agent.evaluate_action(Action(event))}')
+                    #print(f'they can ask for {action.__name__}: {self.evaluate_action(Action(event))}')
                 if event := action.instantiate(self.gameObject.world, RoleList([Role("Initiator", partner.gameObject), Role("Subject", None), Role("Other", self.gameObject)])):
                     possible_actions.append(Action(event))
-                    #print(f'they can ask for {action.__name__}: {self.agent.evaluate_action(Action(event))}')
+                    #print(f'they can ask for {action.__name__}: {self.evaluate_action(Action(event))}')
 
             #...others here...
 
-        possible_actions = [p for p in possible_actions if self.agent.evaluate_action(p) > 0 and p not in self.agent.negotiation_state.currentOffers[0]]
+        possible_actions = [p for p in possible_actions if self.evaluate_action(p) > 0 and p not in self.negotiation_state.currentOffers[0]]
         #print(f'{len(possible_actions)} are pos')
         return possible_actions
 
     #evaluate action (evaluator, verb, subject, object, verbbenefitfor_subject, verbbenefitfor_object):
-    def evaluate_action_ov(self, old_self, action : Action) -> int:
+    def evaluate_action(self, action : Action) -> int:
         neighborly_action_priority = action.val.get_priority()
         effects_dict = action.val.get_effects()
 
@@ -141,9 +141,7 @@ class NeighborlyNegotiator():
                             #utility -= 1 * sign
 
                     if not used_rational_util:
-                        r = random.Random()
-                        r.seed(self.gameObject.uid)
-                        utility += r.randint(0, 3) * sign
+                        utility += self.gameObject.world.get_resource(random.Random).randint(0, 3) * sign
 
                     continue
 
@@ -189,4 +187,4 @@ class NeighborlyNegotiator():
                     if biz and effect.item in prod.requires:
                         utility += 2 #knowledge is power or whatever
 
-        return utility * neighborly_action_priority# * (0.75 + 0.5 * self.gameObject.world.get_resource(random.Random).random())
+        return utility * neighborly_action_priority

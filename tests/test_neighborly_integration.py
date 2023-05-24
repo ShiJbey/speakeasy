@@ -8,7 +8,10 @@ from neighborly.components import GameCharacter
 from neighborly.core.ecs import Active
 from neighborly.core.roles import RoleList
 from neighborly.core.relationship import get_relationship
+from neighborly.core.life_event import AllEvents
+from neighborly.exporter import export_to_json
 
+sys.path.append('../')
 from speakeasy.events import get_associated_business
 from speakeasy.components import Respect, Produces
 from speakeasy.events import TradeEvent, GoodWordEvent, GiveEvent, TellAboutEvent
@@ -70,7 +73,7 @@ def run_random_negotiation(sim: neighborly.Neighborly, num: int = 1):
             partner = NeighborlyNegotiator(
                 partner.full_name, sim.world.get_gameobject(partner_gid)
             )
-            options = get_initial_ask_options(initiator.agent, partner.agent)
+            options = get_initial_ask_options(initiator, partner)
             tries += 1
 
         if len(options) < 1:
@@ -98,7 +101,7 @@ def run_random_negotiation(sim: neighborly.Neighborly, num: int = 1):
         )
 
         # state.setup_initial_ask(thing_to_ask_for)
-        print_negotiation_trace(initiator.agent, partner.agent, thing_to_ask_for)
+        print_negotiation_trace(initiator, partner, thing_to_ask_for)
         pairs_run.append((initiator, partner))
         num -= 1
 
@@ -133,15 +136,12 @@ def run_sim_with_negotiation(
                     }
                 },
                 "plugins": [
-                    # "neighborly.plugins.defaults.all",
                     "neighborly.plugins.defaults.characters",
-                    # "neighborly.plugins.defaults.businesses",
                     "neighborly.plugins.defaults.residences",
                     "neighborly.plugins.defaults.life_events",
                     "neighborly.plugins.defaults.social_rules",
                     "neighborly.plugins.defaults.location_bias_rules",
                     "neighborly.plugins.defaults.resident_spawning",
-                    # "neighborly.plugins.defaults.settlement",
                     "neighborly.plugins.defaults.create_town",
                     "speakeasy.plugin",
                 ],
@@ -199,27 +199,44 @@ def test_seed_consistency(duration = 1, seed = 1337):
                     }
                 },
                 "plugins": [
-                    #"neighborly.plugins.defaults.all",
+                    "neighborly.plugins.defaults.create_town",
                     "neighborly.plugins.defaults.characters",
-                    #"neighborly.plugins.defaults.businesses",
                     "neighborly.plugins.defaults.residences",
                     "neighborly.plugins.defaults.life_events",
                     "neighborly.plugins.defaults.social_rules",
                     "neighborly.plugins.defaults.location_bias_rules",
                     "neighborly.plugins.defaults.resident_spawning",
-                    #"neighborly.plugins.defaults.settlement",
-                    "neighborly.plugins.defaults.create_town",
+                    "neighborly.plugins.defaults.systems",
+                    "neighborly.plugins.defaults.names",
                     "speakeasy.plugin"
                 ],
             }
         )
         )
+        print(f"++++++Starting Sim {i+1}+++++++")
+        sim.run_for(duration)
         sims.append(sim)
-        
 
+        with open(f"speakeasy_synced_{sim.config.seed}_{i}.json", "w") as f:
+            f.write(export_to_json(sim))
 
+    for i in range(num_to_sync):
+        all_events = sims[i].world.get_resource(AllEvents)
+        for event in all_events:
+            for j in range(num_to_sync):
+                if i == j:
+                    continue
+                other_all_events = sims[j].world.get_resource(AllEvents)
+                if event not in other_all_events:
+                    print(f"Desync at event #{event.get_id()}: {event}")
+                    return False
+                
+    return True
 
 if __name__ == '__main__':
-    sim = run_sim_with_negotiation(int(sys.argv[1]) if len(sys.argv) > 1 else 15)
-    test_supported_event_feasibility(sim)
-    run_random_negotiation(sim)
+    if (test_seed_consistency()):
+        sim = run_sim_with_negotiation(int(sys.argv[1]) if len(sys.argv) > 1 else 15)
+        test_supported_event_feasibility(sim)
+        run_random_negotiation(sim)
+    else:
+        print("Failed the seed conistency check.")

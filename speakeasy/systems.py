@@ -44,19 +44,3 @@ class ProduceItemsSystem(System):
             # Add produces items to owners' inventory
             for item, quantity in produces.produces.items():
                 inventory.add_item(item, quantity)
-
-class ProbeRelationshipSystem(System):
-    sys_group = "late-update"
-
-    def run(self, *args: Any, **kwargs: Any) -> None:
-        for id, (_, _, _) in self.world.get_components(
-            (GameCharacter, Active, RelationshipManager)
-        ):
-            for id2, (_, _, _) in self.world.get_components(
-                (GameCharacter, Active, RelationshipManager)
-            ):
-                get_relationship(
-                    self.world.get_gameobject(id), self.world.get_gameobject(id2)
-                )
-
-        self.world.remove_system(type(self))

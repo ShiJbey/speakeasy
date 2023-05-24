@@ -28,24 +28,26 @@ def offers_to_string(offers : list):
   return " OR ".join([("[" + ",".join([str(action.val) for action in offer]) + "]") for offer in offers])
 
 class Agent:
-  def __init__(self):
+  def __init__(self, seeded_random=None):
+    if seeded_random:
+      self.random = seeded_random if seeded_random else random.Random()
+
     self.utilities = {}
     for i in range(26):
       action = Action(chr(ord('A') + i))
       self.utilities[action.val] = random.randint(-5,5)
 
     # Must have something w positive utility
-    idx = random.randint(0,25)
-    val = random.randint(1,5)
+    idx = self.random.randint(0,25)
+    val = self.random.randint(1,5)
     self.utilities[list(self.utilities.keys())[idx]] = val
     self.ActionToAskFor = Action(chr(ord('A') + idx))
     self.parent = None
     self.negotiation_state = None
 
-  # naive evaluation = random dictionary lookup
+  # naive evaluation = random dictionary lookup. meant to be overloaded.
   def evaluate_action(self, action: Action):
     return self.utilities[action.val]
-
   def evaluate_offer(self, offer: NegotiationOffer):
     return sum([self.evaluate_action(action) for action in offer])
 
@@ -165,8 +167,6 @@ def get_initial_ask_options(agent1 : Agent, agent2 : Agent):
   return agent1.generate_starting_possible_actions()
 
 def print_negotiation_trace(agent1 : Agent, agent2 : Agent, initialAsk):
-    #agent1 = Agent()
-    #agent2 = Agent()
     state : NegotiationState = agent1.negotiation_state
 
 
@@ -223,3 +223,10 @@ if __name__ == "__main__":
   agent1 = Agent()
   agent2 = Agent()
   print_negotiation_trace(agent1, agent2, agent1.ActionToAskFor)
+
+def negotiate(agent1, agent2, thing_to_ask_for):
+    result = print_negotiation_trace(agent1, agent2, thing_to_ask_for)
+    if result[0] == ResponseCategory.ACCEPT:
+        return result[1][0]
+    else:
+        return[]
