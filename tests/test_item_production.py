@@ -22,18 +22,18 @@ def test_produces() -> None:
 
     world.step()
 
-    assert inventory.get_item("sword") == 0
-    assert inventory.get_item("armor") == 0
+    assert inventory.get_quantity("sword") == 0
+    assert inventory.get_quantity("armor") == 0
 
     # Add resources to inventory
     inventory.add_item("iron ore", 10)
 
     world.step()
 
-    assert inventory.get_item("sword") == 1
-    assert inventory.get_item("armor") == 1
+    assert inventory.get_quantity("sword") == 1
+    assert inventory.get_quantity("armor") == 1
 
     world.step()
 
-    assert inventory.get_item("sword") == 2
-    assert inventory.get_item("armor") == 2
+    assert inventory.get_quantity("sword") == 2
+    assert inventory.get_quantity("armor") == 2

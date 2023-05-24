@@ -2,16 +2,16 @@ from typing import Dict, Type
 
 from neighborly import GameObject
 from neighborly.components import Virtues
-from neighborly.core.relationship import RelationshipFacet, Romance, Friendship
-from neighborly.utils.query import are_related
+from neighborly.core.relationship import Friendship, RelationshipFacet, Romance
 from neighborly.decorators import social_rule
+from neighborly.utils.query import are_related
 
 from speakeasy.components import Ethnicity, Faction, Respect
 
+
 @social_rule("Characters with the same ethnicity gain a boost in respect")
 def respect_same_ethnicity(
-    subject: GameObject,
-    target: GameObject
+    subject: GameObject, target: GameObject
 ) -> Dict[Type[RelationshipFacet], int]:
     """Characters with the same ethnicity gain a boost in respect"""
 
@@ -21,10 +21,10 @@ def respect_same_ethnicity(
 
     return {}
 
+
 @social_rule("Characters with different ethnicities lose respect")
 def disrespect_different_ethnicity(
-    subject: GameObject,
-    target: GameObject
+    subject: GameObject, target: GameObject
 ) -> Dict[Type[RelationshipFacet], int]:
     """Characters with different ethnicities lose respect"""
 
@@ -34,10 +34,10 @@ def disrespect_different_ethnicity(
 
     return {}
 
+
 @social_rule("Characters with the same faction gain a boost in respect")
 def respect_same_faction(
-    subject: GameObject,
-    target: GameObject
+    subject: GameObject, target: GameObject
 ) -> Dict[Type[RelationshipFacet], int]:
     """Characters with the same faction gain a boost in respect"""
 
@@ -47,10 +47,10 @@ def respect_same_faction(
 
     return {}
 
+
 @social_rule("Characters that are closely related gain a boost in respect")
 def respect_for_family(
-    subject: GameObject,
-    target: GameObject
+    subject: GameObject, target: GameObject
 ) -> Dict[Type[RelationshipFacet], int]:
     """Characters that are closely related gain a boost in respect"""
 
@@ -59,10 +59,10 @@ def respect_for_family(
 
     return {}
 
+
 @social_rule("Characters with shared high/low virtues gain romance points")
 def romance_boost_from_shared_virtues(
-    subject: GameObject,
-    target: GameObject
+    subject: GameObject, target: GameObject
 ) -> Dict[Type[RelationshipFacet], int]:
     """Characters with shared high/low virtues gain romance points"""
 
@@ -72,17 +72,19 @@ def romance_boost_from_shared_virtues(
     subject_virtues = subject.get_component(Virtues)
     target_virtues = target.get_component(Virtues)
 
-    shared_likes = set(subject_virtues.get_high_values()).intersection(set(target_virtues.get_high_values()))
-    shared_dislikes = set(subject_virtues.get_low_values()).intersection(set(target_virtues.get_low_values()))
+    shared_likes = set(subject_virtues.get_high_values()).intersection(
+        set(target_virtues.get_high_values())
+    )
+    shared_dislikes = set(subject_virtues.get_low_values()).intersection(
+        set(target_virtues.get_low_values())
+    )
 
-    return {
-        Romance: len(shared_likes) + len(shared_dislikes)
-    }
+    return {Romance: len(shared_likes) + len(shared_dislikes)}
+
 
 @social_rule("Characters with shared high/low virtues gain romance points")
 def romance_loss_from_virtue_conflicts(
-    subject: GameObject,
-    target: GameObject
+    subject: GameObject, target: GameObject
 ) -> Dict[Type[RelationshipFacet], int]:
     """Characters with shared high/low virtues gain romance points"""
 
@@ -92,17 +94,19 @@ def romance_loss_from_virtue_conflicts(
     subject_virtues = subject.get_component(Virtues)
     target_virtues = target.get_component(Virtues)
 
-    subject_conflicts = set(subject_virtues.get_high_values()).intersection(set(target_virtues.get_low_values()))
-    target_conflicts = set(target_virtues.get_high_values()).intersection(set(subject_virtues.get_low_values()))
+    subject_conflicts = set(subject_virtues.get_high_values()).intersection(
+        set(target_virtues.get_low_values())
+    )
+    target_conflicts = set(target_virtues.get_high_values()).intersection(
+        set(subject_virtues.get_low_values())
+    )
 
-    return {
-        Romance: -1 * (len(subject_conflicts) + len(target_conflicts))
-    }
+    return {Romance: -1 * (len(subject_conflicts) + len(target_conflicts))}
+
 
 @social_rule("Characters with more similar virtues will be better friends")
 def friendship_virtue_compatibility(
-    subject: GameObject,
-    target: GameObject
+    subject: GameObject, target: GameObject
 ) -> Dict[Type[RelationshipFacet], int]:
     """Characters with more similar virtues will be better friends"""
 

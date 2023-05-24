@@ -1,5 +1,6 @@
 import random
-from typing import Any, Dict, Generator, List, Optional, Tuple
+from typing import List, Optional
+
 from neighborly.components.business import (
     Business,
     BusinessOwner,
@@ -14,13 +15,14 @@ from neighborly.core.time import SimDateTime
 from neighborly.components.shared import Name
 from neighborly.core.roles import Role, RoleList
 from neighborly.core.life_event import RandomLifeEvent, AllEvents, EventHistory
-from neighborly.core.relationship import RelationshipFacet, Relationship, RelationshipModifier, RelationshipManager
+from neighborly.core.relationship import RelationshipFacet, Relationship, RelationshipManager
 from neighborly.core.relationship import (
     get_relationship,
     get_relationships_with_statuses
 )
 from neighborly.decorators import random_life_event
-from neighborly.simulation import Neighborly, PluginInfo
+
+from speakeasy.negotiation.core import NegotiationState
 
 ############
 # TODO: remove placeholders for new stuff
@@ -36,11 +38,11 @@ from speakeasy.components import Inventory, Knowledge, Respect, Favors, Produces
 
 # Classes for the different effects map entries
 class GainItemEffect:
-    def __init__(self, item) -> None:
+    def __init__(self, item: str) -> None:
         self.item = item
 
 class LoseItemEffect:
-    def __init__(self, item) -> None:
+    def __init__(self, item: str) -> None:
         self.item = item
 
 class GainRelationshipEffect:
@@ -54,7 +56,7 @@ class LoseRelationshipEffect:
         self.facet = facet
 
 class GainKnowledgeEffect:
-    def __init__(self, item) -> None:
+    def __init__(self, item: str) -> None:
         self.item = item
 
 class TriggerEventEffect:
@@ -71,7 +73,7 @@ def needs_item_from(a: Business, b: Inventory, r : random.Random):
     return None
 
 def has_knowledge(a: Knowledge, b: Business) -> bool:
-    return True in [b.gameobject._id in i for i in list(a.produces.values())]
+    return True in [b.gameobject.uid in i for i in list(a.produces.values())]
 
 def get_associated_business(obj : GameObject) -> Business:
     bizown = None
@@ -87,7 +89,7 @@ def get_associated_business(obj : GameObject) -> Business:
 
     if bizown:
         associated_biz = obj.world.get_gameobject(bizown.business).get_component(Business)
-    
+
     return associated_biz
 
 #learning that someone's biz produces an item
@@ -104,7 +106,7 @@ class LearnAboutEvent(RandomLifeEvent):
 
     def get_priority(self) -> float:
         return 1
-    
+
     def get_probability(self) -> float:
         return 1
 
@@ -121,7 +123,7 @@ class LearnAboutEvent(RandomLifeEvent):
         initiators_knowledge = initiator.get_component(Knowledge)
         others_biz = get_associated_business(other)
         others_items = list(others_biz.gameobject.get_component(Produces).produces.keys())
-        initiators_knowledge.add_producer(others_biz.gameobject._id, others_items[0])
+        initiators_knowledge.add_producer(others_biz.gameobject.uid, others_items[0])
 
     @staticmethod
     def _bind_initiator(
@@ -147,7 +149,7 @@ class LearnAboutEvent(RandomLifeEvent):
 
             if candidate_biz not in initiator_knowledge.produces[candidate_item]:
                 return candidate
-            
+
         return None
 
 
@@ -300,7 +302,7 @@ class TradeEvent(RandomLifeEvent):
             initiators_biz = get_associated_business(initiator)
             characters_inv = character.get_component(Inventory)
 
-            needed_item = needs_item_from(initiators_biz, characters_inv, world.get_resource(random.Random)) 
+            needed_item = needs_item_from(initiators_biz, characters_inv, world.get_resource(random.Random))
             if needed_item is None:
                 #print('init needs nothing from other?')
                 continue
@@ -346,7 +348,7 @@ class TradeEvent(RandomLifeEvent):
 
         other, o_item = other_tup
         return cls(world.get_resource(SimDateTime), initiator, other, i_item, o_item)
-    
+
     def __str__(self) -> str:
         return f"{super().__str__()}, i_item={str(self.initiators_item)}, o_item={str(self.others_item)}"
 
@@ -362,7 +364,7 @@ class GoodWordEvent(RandomLifeEvent):
 
     def get_priority(self) -> float:
         return 1
-    
+
     def get_probability(self) -> float:
         return 1
 
@@ -384,7 +386,7 @@ class GoodWordEvent(RandomLifeEvent):
         favors_sub_owes_init_DISCOURAGING = get_relationship(subject, initiator).get_component(Favors).favors
         favors_init_owed_sub_ENCOURAGING = get_relationship(initiator, subject).get_component(Favors).favors
         #print(f"Prior, SUB now owes INIT: {favors_sub_owes_init_DISCOURAGING} + 1, and INIT ALREADY OWED SUB {favors_init_owed_sub_ENCOURAGING} (-1)?")
-        
+
         #add some respect
         get_relationship(other, subject).get_component(Respect).increment(1)#add_modifier(RelationshipModifier('Gained respect due to good word.', {Respect:1}))
 
@@ -529,7 +531,7 @@ class TellAboutEvent(RandomLifeEvent):
 
     def get_priority(self) -> float:
         return 1
-    
+
     def get_probability(self) -> float:
         return 1
 
@@ -604,16 +606,16 @@ class TellAboutEvent(RandomLifeEvent):
             for character in all_candidates:
                 respect = get_relationship(initiator, character).get_component(Respect)
                 if respect.get_value() >= respect_threshold:
-                    candidates.append(character)     
+                    candidates.append(character)
 
         matches: List[GameObject] = []
 
         for character in candidates:
              if character.has_component(Knowledge):
-                
+
                 #prepreq: initiator must know new business for other
                 other_knowledge = character.get_component(Knowledge)
-                
+
                 known_businesses = initiator.get_component(Knowledge).known_producers()
                 other_known_businesses = other_knowledge.known_producers()
 
@@ -640,7 +642,7 @@ class TellAboutEvent(RandomLifeEvent):
                 return None
         else:
             candidates = [world.get_gameobject(i) for i in initiators_known_bizs]
-            candidates = [b.get_component(Business) for b in candidates if b._id not in others_known_bizs]
+            candidates = [b.get_component(Business) for b in candidates if b.uid not in others_known_bizs]
             candidates = [world.get_gameobject(b.owner) for b in candidates if b.owner]
 
         if candidates:
@@ -685,7 +687,7 @@ class TheftEvent(RandomLifeEvent):
 
     def get_priority(self) -> float:
         return 1
-    
+
     def get_probability(self) -> float:
         return 1
 
@@ -735,7 +737,7 @@ class TheftEvent(RandomLifeEvent):
             ]
 
         matches = []
-        
+
         #initiator must disrespect someonethey know
         for candidate in candidates:
 
@@ -786,7 +788,7 @@ class TheftEvent(RandomLifeEvent):
             return None
 
         return cls(world.get_resource(SimDateTime), initiator, other)
-    
+
     def __str__(self) -> str:
         return f"{super().__str__()}"
 
@@ -806,7 +808,7 @@ class GiveEvent(RandomLifeEvent):
 
     def get_priority(self) -> float:
         return 1
-    
+
     def get_probability(self) -> float:
         return 1
 
@@ -848,18 +850,18 @@ class GiveEvent(RandomLifeEvent):
     def _bind_other(
         world: World, initiator: GameObject, candidate: Optional[GameObject] = None
     ) -> Optional[GameObject]:
-        
+
         if candidate and candidate != initiator:
             if candidate.has_component(Inventory):
                 return candidate
             return None
         else:
             return None
-    
+
     def _bind_item(
         world: World, initiator: Optional[GameObject] = None, other: Optional[GameObject] = None
     ) -> Optional[GameObject]:
-        
+
         if initiator and other:
             initiator_inventory = initiator.get_component(Inventory)
             candidates = [world.spawn_gameobject([Name(item)], item) for item in list(initiator_inventory.items)] #needed to spawn to put item in role list but, creates waste?
@@ -887,7 +889,7 @@ class GiveEvent(RandomLifeEvent):
         if other is None:
             #print("give failed on other")
             return None
-        
+
         item = cls._bind_item(world, initiator, other)
 
         if item is None:
@@ -895,7 +897,7 @@ class GiveEvent(RandomLifeEvent):
             return None
 
         return cls(world.get_resource(SimDateTime), initiator, other, item)
-    
+
 @random_life_event()
 class HelpWithRivalGangEvent(RandomLifeEvent):
 
@@ -908,7 +910,7 @@ class HelpWithRivalGangEvent(RandomLifeEvent):
 
     def get_priority(self) -> float:
         return 1
-    
+
     def get_probability(self) -> float:
         return 1
 
@@ -947,9 +949,9 @@ class HelpWithRivalGangEvent(RandomLifeEvent):
     def _bind_other(
         world: World, initiator: GameObject, candidate: Optional[GameObject] = None
     ) -> Optional[GameObject]:
-        
+
         respect_threshold = HELP_EVENT_RESPECT_THRESHOLD
-        
+
         if candidate:
             candidates = [candidate]
         else:
@@ -989,7 +991,7 @@ class HelpWithRivalGangEvent(RandomLifeEvent):
             return None
 
         return cls(world.get_resource(SimDateTime), initiator, other)
-    
+
     def __str__(self) -> str:
         return f"{super().__str__()}"
 
@@ -1007,10 +1009,10 @@ class GenerateKnowledgeEvent(RandomLifeEvent):
 
     def get_effects(self):
         return {}
-    
+
     def get_probability(self) -> float:
         return 1
-    
+
     def execute(self) -> None:
         initiator = self["Initiator"]
 
@@ -1041,9 +1043,9 @@ class GenerateKnowledgeEvent(RandomLifeEvent):
 
         if matches:
             world.get_resource(random.Random).choice(matches)
-        
+
         return None
-    
+
     @classmethod
     def instantiate(
         cls,
@@ -1061,7 +1063,8 @@ class GenerateKnowledgeEvent(RandomLifeEvent):
 @random_life_event()
 class NegotiateEvent(RandomLifeEvent):
     from speakeasy.negotiation.core import get_initial_ask_options
-    from speakeasy.negotiation.neighborly_classes import NegotiationState, NeighborlyNegotiator, negotiate
+    from speakeasy.negotiation.neighborly_classes import NeighborlyNegotiator
+
 
     initiator = "Initiator"
 
@@ -1072,7 +1075,7 @@ class NegotiateEvent(RandomLifeEvent):
 
     def get_priority(self) -> float:
         return 1
-    
+
     def get_probability(self) -> float:
         return 1
 
@@ -1085,7 +1088,7 @@ class NegotiateEvent(RandomLifeEvent):
             Role("Other", other) : [GainRelationshipEffect(get_relationship(initiator, other)), GainRelationshipEffect(get_relationship(other, initiator))]
         }
 
-    def execute(self) -> None:    
+    def execute(self) -> None:
         initiator = self["Initiator"]
         other = self["Other"]
 
@@ -1096,7 +1099,9 @@ class NegotiateEvent(RandomLifeEvent):
         if len(options) < 1:
             #print("Nothing to ask for.")
             return
-        thing_to_ask_for = random.choice(options)
+
+
+        thing_to_ask_for = initiator.world.get_resource(random.Random).choice(options)
 
         print(f'Running negotiation between {negotiator.name} and {partner.name}:')
         print(f'{negotiator.name}:{negotiator.gameObject.get_component(Inventory).items}\n{partner.name}:{partner.gameObject.get_component(Inventory).items}')
@@ -1205,19 +1210,21 @@ class NegotiateEvent(RandomLifeEvent):
 
         if initiator is None:
             return None
-        
+
         other = cls._bind_other(world, initiator, bindings.get("Other"))
 
         if other is None:
             return None
-        
+
         return cls(world.get_resource(SimDateTime), initiator, other)
-    
+
+    @staticmethod
+    def negotiate(agent1, agent2, thing_to_ask_for):
+        result = print_negotiation_trace(agent1, agent2, thing_to_ask_for)
+        if result[0] == ResponseCategory.ACCEPT:
+            return result[1][0]
+        else:
+            return[]
+
     def __str__(self) -> str:
         return f"{super().__str__()}"
-
-plugin_info = PluginInfo(
-    name="speakeasy events plugin",
-    plugin_id="speakeasy.life-events",
-    version="0.1.0",
-)

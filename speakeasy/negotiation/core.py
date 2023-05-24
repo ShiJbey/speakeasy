@@ -52,13 +52,13 @@ class Agent:
   # worker for generate_counter_offers
   def generate_counter_offers_recursive(self,
   offerUtilityNeeded: int,
-  counterOfferSoFar: NegotiationOffer, 
+  counterOfferSoFar: NegotiationOffer,
   counterOffers: list,
   rejectedOffers: list,
   possibleActions: list):
     if (len(possibleActions) < 1):
       return counterOffers
-    
+
     possibleNextAction = possibleActions.pop()
     utilityOfNextAction = self.evaluate_action(possibleNextAction)
 
@@ -67,8 +67,8 @@ class Agent:
     # cutoff recursion with the rejection list. #TODO: doesn't make sense to do really. and wont work as root offer isn't included
     #if (counterOfferSoFar in rejectedOffers):
     #  return counterOffers
-    
-    # naive: Don't continue building if not needed for own utility TODO: parameterize as Greed ? 
+
+    # naive: Don't continue building if not needed for own utility TODO: parameterize as Greed ?
     if (self.evaluate_offer(counterOfferSoFar) > offerUtilityNeeded): #changed to must exceed needed, bc of case where needed = 0
       # TODO: doesnt work bc initial offer isn't included, see: print('appending current offer: ', offers_to_string([counterOfferSoFar]), ', rejected offers: ', offers_to_string(rejectedOffers))
       if (counterOfferSoFar not in rejectedOffers):
@@ -77,34 +77,34 @@ class Agent:
 
     # else recurse and continue building the current offer.
     return self.generate_counter_offers_recursive(offerUtilityNeeded, counterOfferSoFar, counterOffers, rejectedOffers, possibleActions)
-    
+
   def generate_starting_possible_actions(self):
     return [ action for action in list(map(Action, list(self.utilities.keys()))) if self.evaluate_action(action) > 0]
-  
+
   #Naive Countering: Find sequence of actions (Offers) that sum to match (or exceed) needed utility.
   def generate_counter_offers(self, offerUtilityNeeded: int, startingOffer: NegotiationOffer, rejectedOffers : list):
     # startingPossibleActions = [ Action(val) for val in list(self.utilities.keys()) ]
     startingPossibleActions = self.generate_starting_possible_actions()
     startingPossibleActions = [a for a in startingPossibleActions if a not in startingOffer]
     startingPossibleActions = sorted(startingPossibleActions, key = lambda action: self.evaluate_action(action), reverse=False)
-    
+
     # debug: print all starting possible actions
     # print(*[action.val +':'+ str(self.evaluate_action(action)) for action in startingPossibleActions])
 
     counterOffers = self.generate_counter_offers_recursive(offerUtilityNeeded, [], [], rejectedOffers, startingPossibleActions)
 
     counterOffers = [startingOffer + offer for offer in counterOffers]
-		
+
     return counterOffers
-  
+
   # return tuple (responseCategory, counterOffers)
   def respond_to_offer(self, offer: NegotiationOffer, rejectedOffers: list, number_of_options: int = 2):
     counterOffers = []
-		
+
     # Naive Order: First come first serve.
-    currentOfferUtility = self.evaluate_offer(offer); # Evaluate what they're asking for. 
-    
-    if (currentOfferUtility > 0): #TODO: parameterize willingness to perform neutral acts. aka Selfishness<->Benevolence? 
+    currentOfferUtility = self.evaluate_offer(offer); # Evaluate what they're asking for.
+
+    if (currentOfferUtility > 0): #TODO: parameterize willingness to perform neutral acts. aka Selfishness<->Benevolence?
       counterOffers = [ offer ]
       return (ResponseCategory.ACCEPT, counterOffers)
 
@@ -114,13 +114,13 @@ class Agent:
 
     if (len(counterOffers) > 0):
       return (ResponseCategory.COUNTER, counterOffers)
-    
+
     #try to compensate with Gratitude?
-    
+
     #try to compensate with Money?
-    
+
     #try to compensate with Reciprocal Action?
-		
+
     return (ResponseCategory.REJECT, counterOffers)
 
   #this agent will take a turn, modify and return the negotiation state.
@@ -138,7 +138,7 @@ class NegotiationState:
     self.lastResult = ResponseCategory.COUNTER
     self.lastCountered = []
     self.currentAgentIndex = 2
-    
+
     #containers for exchanged actions
     self.to_agent1 = []
     self.to_agent2 = []
@@ -147,10 +147,10 @@ class NegotiationState:
     self.initialAsk = action
     self.initialOffer = [ self.initialAsk ]
     self.currentOffers = [ self.initialOffer ]
-  
+
   def get_agent_index(self, agent : Agent):
     return 1 if self.agent1 == agent else 2
-  
+
   def get_partner(self, agent : Agent):
     if agent == self.agent1:
       return self.agent2
@@ -168,50 +168,50 @@ def print_negotiation_trace(agent1 : Agent, agent2 : Agent, initialAsk):
     #agent1 = Agent()
     #agent2 = Agent()
     state : NegotiationState = agent1.negotiation_state
-    
-		
+
+
 		#Negotiation Protocol
     state.setup_initial_ask(initialAsk)
-		
+
     print("Negotiation Begins")
     print("==================")
     print(f"Agent 1 opens by asking Agent 2 for {offers_to_string(state.currentOffers)}. ", end =" ")
-		
+
     actionsDiscussed = []
-		
+
     while state.lastResult == ResponseCategory.COUNTER:
       for offer in state.currentOffers:
         print(f"[{agent1.evaluate_offer(offer)}:{agent2.evaluate_offer(offer)}] ", end =" ")
         actionsDiscussed += offer
-      
+
       print()
-			
+
       state.currentAgent = agent1 if state.currentAgentIndex == 1 else agent2
       counterOffers = []
       for currentOfferIndex, currentOffer in enumerate(state.currentOffers):
         if currentOfferIndex > 0 and state.lastResult != ResponseCategory.REJECT:
           continue
         (state.lastResult, counterOffers) = state.currentAgent.respond_to_offer(currentOffer, state.rejectedOffers)
-			
+
       state.rejectedOffers += state.currentOffers
-			
+
       if state.lastResult == ResponseCategory.COUNTER:
         print(f"Agent {state.currentAgentIndex} counters with {offers_to_string(counterOffers)}. ", end = ' ')
         state.currentOffers = counterOffers
-      elif state.lastResult == ResponseCategory.ACCEPT: 
+      elif state.lastResult == ResponseCategory.ACCEPT:
         print(f"Agent {state.currentAgentIndex} accepts {offers_to_string(counterOffers)}. ", end = ' ')
         state.currentOffers = counterOffers
 
         for offer in state.currentOffers:
           print(f"[{agent1.evaluate_offer(offer)}:{agent2.evaluate_offer(offer)}] ")
 
-      elif state.lastResult == ResponseCategory.REJECT: 
+      elif state.lastResult == ResponseCategory.REJECT:
         print(f"Agent {state.currentAgentIndex} rejects. ")
-				
+
       state.currentAgentIndex = 2 if state.currentAgentIndex == 1 else 1
-		
+
     print("==================")
-		
+
     for a in actionsDiscussed:
       print(f"[{a.val} => {agent1.evaluate_action(a)}:{agent2.evaluate_action(a)}]")
 
@@ -221,8 +221,5 @@ def print_negotiation_trace(agent1 : Agent, agent2 : Agent, initialAsk):
 
 if __name__ == "__main__":
   agent1 = Agent()
-  agent2 = Agent()  
+  agent2 = Agent()
   print_negotiation_trace(agent1, agent2, agent1.ActionToAskFor)
-  
-		
-		

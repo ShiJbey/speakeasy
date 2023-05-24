@@ -3,18 +3,18 @@ One of the problems with this project is determining how to author actions.
 """
 import pathlib
 import random
-from typing import Optional, List
-from attr import has
+from typing import ClassVar, Dict, List, Optional
 
 from neighborly import GameObject, Neighborly, NeighborlyConfig, SimDateTime, World
-from neighborly.decorators import life_event
-from neighborly.core.life_event import ActionableLifeEvent
+from neighborly.components import GameCharacter, LifeStage, Name, Virtue, Virtues
+from neighborly.components.character import LifeStageType
+from neighborly.core.ecs import Active
+from neighborly.core.life_event import RandomLifeEvent
 from neighborly.core.roles import Role, RoleList
-from neighborly.components import Virtues, Virtue, Active, GameCharacter, Name
-from neighborly.components.character import Child, Adolescent
-from neighborly.loaders import load_names
 from neighborly.core.tracery import Tracery
-from numpy import character
+from neighborly.decorators import random_life_event
+from neighborly.loaders import load_names
+from neighborly.core.ai.brain import ConsiderationList
 
 from speakeasy.components import Faction, IsFaction
 
@@ -45,31 +45,41 @@ sim = Neighborly(
                 }
             },
             "plugins": [
-                "neighborly.plugins.defaults.names",
-                "neighborly.plugins.defaults.characters",
-                "neighborly.plugins.defaults.businesses",
-                "neighborly.plugins.defaults.residences",
-                "neighborly.plugins.defaults.ai",
-                "neighborly.plugins.defaults.location_bias_rules",
-                "neighborly.plugins.defaults.create_town",
-                "speakeasy.plugin",
+                "neighborly.plugins.defaults.all",
+                "neighborly.plugins.talktown.spawn_tables",
+                "neighborly.plugins.talktown",
+                "speakeasy.plugin"
             ],
         }
     )
 )
 
 
-@life_event(sim)
-class StartGang(ActionableLifeEvent):
-    """A character starts a new gang
+@random_life_event()
+class StartGangEvent(RandomLifeEvent):
+    """A character starts a new gang.
 
+    Notes
+    -----
     At any point in the simulation the character may choose to start a new gang. Gangs
     are factions, and factions can track relationships between other factions and
     characters. Ideally, we would get characters that are ambitious to be the ones that
     start a gang.
     """
 
-    initiator = "Initiator"
+    considerations: Dict[str, ConsiderationList] = {
+        "Initiator": ConsiderationList([
+            lambda gameobject: (
+                (gameobject.get_component(Virtues)[Virtue.AMBITION] + 50.0) / 100.0
+            ),
+            lambda gameobject: (
+                (gameobject.get_component(Virtues)[Virtue.POWER] + 50.0) / 100.0
+            ),
+            lambda gameobject: (
+                (gameobject.get_component(Virtues)[Virtue.WEALTH] + 50.0) / 100.0
+            )
+        ])
+    }
 
     def __init__(self, timestamp: SimDateTime, character: GameObject) -> None:
         super().__init__(timestamp, [Role("Initiator", character)])
@@ -79,9 +89,7 @@ class StartGang(ActionableLifeEvent):
         return self["Initiator"]
 
     @classmethod
-    def instantiate(
-        cls, world: World, bindings: RoleList
-    ) -> Optional[ActionableLifeEvent]:
+    def instantiate(cls, world: World, bindings: RoleList) -> Optional[RandomLifeEvent]:
         candidate = bindings.get("Initiator")
 
         if candidate:
@@ -96,7 +104,10 @@ class StartGang(ActionableLifeEvent):
             if character.has_component(Faction):
                 continue
 
-            if character.has_component(Child) or character.has_component(Adolescent):
+            if (
+                character.get_component(LifeStage).life_stage
+                <= LifeStageType.Adolescent
+            ):
                 continue
 
             prob = cls.probability_of_starting_gang(character)
@@ -121,30 +132,54 @@ class StartGang(ActionableLifeEvent):
 
         gang = world.spawn_gameobject([Name(gang_name), IsFaction()], name=gang_name)
 
-        self.character.add_component(Faction(gang_name, gang.uid))
+        self.character.add_component(Faction(gang.uid))
 
-    @staticmethod
-    def probability_of_starting_gang(character: GameObject) -> float:
-        virtues = character.get_component(Virtues)
-        virtue_sum = max(
-            0, virtues[Virtue.AMBITION] + virtues[Virtue.POWER] + virtues[Virtue.WEALTH]
+    @classmethod
+    def probability_of_starting_gang(cls, character: GameObject) -> float:
+        return cls.considerations["Initiator"].calculate_score(character)
+
+    def get_probability(self) -> float:
+        return StartGangEvent.probability_of_starting_gang(self.character)
+
+
+@random_life_event()
+class JoinGangEvent(RandomLifeEvent):
+
+    JOIN_GANG_UTILITY_THRESH: ClassVar[float] = 0.4
+
+    considerations: ClassVar[Dict[str, ConsiderationList]] = {
+        "Initiator": ConsiderationList(
+            [
+                lambda gameobject: (
+                    (gameobject.get_component(Virtues)[Virtue.AMBITION] + 50.0) / 100.0
+                ),
+                lambda gameobject: (
+                    (gameobject.get_component(Virtues)[Virtue.POWER] + 50.0) / 100.0
+                ),
+                lambda gameobject: (
+                    (gameobject.get_component(Virtues)[Virtue.WEALTH] + 50.0) / 100.0
+                ),
+                lambda gameobject: (
+                    (gameobject.get_component(Virtues)[Virtue.LOYALTY] + 50.0) / 100.0
+                ),
+                lambda gameobject: (
+                    (gameobject.get_component(Virtues)[Virtue.FAMILY] + 50.0) / 100.0
+                ),
+                lambda gameobject: 0 if gameobject.has_component(Faction) else None,
+                lambda gameobject: (
+                    0 if gameobject.get_component(LifeStage).life_stage
+                    <= LifeStageType.Adolescent
+                    else
+                    None
+                )
+            ]
         )
-        return min(1.0, (float(virtue_sum) / 100.0))
-
-    def get_priority(self) -> float:
-        return self.probability_of_starting_gang(self.character)
-
-
-@life_event(sim)
-class JoinGang(ActionableLifeEvent):
-    initiator = "Initiator"
+    }
 
     def __init__(
         self, timestamp: SimDateTime, character: GameObject, gang: GameObject
     ) -> None:
-        super().__init__(
-            timestamp, [Role("Initiator", character), Role("Gang", gang)]
-        )
+        super().__init__(timestamp, [Role("Initiator", character), Role("Gang", gang)])
 
     @property
     def character(self) -> GameObject:
@@ -165,15 +200,9 @@ class JoinGang(ActionableLifeEvent):
         for guid, _ in world.get_components((GameCharacter, Virtues, Active)):
             character = world.get_gameobject(guid)
 
-            if character.has_component(Faction):
-                continue
+            prob = JoinGangEvent.probability_of_joining_gang(character)
 
-            if character.has_component(Child) or character.has_component(Adolescent):
-                continue
-
-            prob = JoinGang.probability_of_joining_gang(character)
-
-            if prob > 0.4:
+            if prob > JoinGangEvent.JOIN_GANG_UTILITY_THRESH:
                 candidates.append(character)
                 weights.append(prob)
 
@@ -201,9 +230,7 @@ class JoinGang(ActionableLifeEvent):
         return None
 
     @classmethod
-    def instantiate(
-        cls, world: World, bindings: RoleList
-    ) -> Optional[ActionableLifeEvent]:
+    def instantiate(cls, world: World, bindings: RoleList) -> Optional[RandomLifeEvent]:
         initiator = cls._bind_initiator(world, bindings.get("Initiator"))
 
         if initiator is None:
@@ -227,29 +254,18 @@ class JoinGang(ActionableLifeEvent):
 
         gang = world.spawn_gameobject([Name(gang_name), IsFaction()])
 
-        self.character.add_component(Faction(gang_name, gang.uid))
+        self.character.add_component(Faction(gang.uid))
 
-    @staticmethod
-    def probability_of_joining_gang(character: GameObject) -> float:
-        virtues = character.get_component(Virtues)
-        virtue_sum = max(
-            0,
-            virtues[Virtue.AMBITION]
-            + virtues[Virtue.POWER]
-            + virtues[Virtue.WEALTH]
-            + virtues[Virtue.LOYALTY]
-            + virtues[Virtue.FAMILY],
-        )
-        return min(1.0, (float(virtue_sum) / 100.0))
+    @classmethod
+    def probability_of_joining_gang(cls, character: GameObject) -> float:
+        return cls.considerations["Initiator"].calculate_score(character)
 
-    def get_priority(self) -> float:
+    def get_probability(self) -> float:
         return self.probability_of_joining_gang(self.character)
 
 
 def main() -> None:
-    load_names(
-        sim.world, "gang_name", pathlib.Path(__file__).parent / "gang_names.txt"
-    )
+    load_names("gang_name", pathlib.Path(__file__).parent / "gang_names.txt")
     sim.run_for(sim.config.years_to_simulate)
 
 

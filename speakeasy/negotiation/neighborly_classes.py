@@ -1,25 +1,16 @@
-import os
-import sys
 import types
+from typing import List
 import random
 
 from neighborly import GameObject
 from neighborly.core.relationship import Relationship
-from neighborly.exporter import export_to_json
 
 from neighborly.core.roles import Role, RoleList
-from neighborly.utils.common import get_relationship
-currentdir = os.path.dirname(os.path.abspath(__file__))
-parentdir = os.path.dirname(currentdir)
+from neighborly.core.relationship import get_relationship
 
-sys.path.insert(0, parentdir + '/negotiation_core') 
-sys.path.insert(0, os.path.abspath(currentdir + '/neighborly/samples'))
-sys.path.insert(0, os.path.abspath(currentdir + '/speakeasy'))
-
-
-from speakeasy.negotiation.core import Action, NegotiationState, Agent, ResponseCategory, print_negotiation_trace
-from speakeasy.events import GainItemEffect, LoseItemEffect, GainKnowledgeEffect, GainRelationshipEffect, LoseRelationshipEffect, needs_item_from, get_associated_business
-from speakeasy.components import Respect, Knowledge, Favors, Produces, Inventory
+from speakeasy.negotiation.core import Action, Agent, ResponseCategory
+from speakeasy.events import GainItemEffect, LoseItemEffect, GainKnowledgeEffect, GainRelationshipEffect, LoseRelationshipEffect, get_associated_business
+from speakeasy.components import Respect, Favors, Produces, Inventory
 from speakeasy.events import TradeEvent, GoodWordEvent, GiveEvent, TellAboutEvent
 
 supported_actions = [TradeEvent, GoodWordEvent, GiveEvent, TellAboutEvent]
@@ -39,13 +30,13 @@ def check_item_possibility(self_object, other_object, offers_so_far, potential_a
 
     for action in list_of_actions:
         effects_dict = action.val.get_effects()
-        
+
         for role in effects_dict.keys():
             if role.gameobject == self_object:
                 chosen_dict = self_net_item_dict
             elif role.gameobject == other_object:
                 chosen_dict = other_net_item_dict
-            
+
             effects = effects_dict[role]
             for effect in effects:
                 if type(effect) in [LoseItemEffect]: #don't consider gain as that can crete really dumb trades
@@ -54,27 +45,27 @@ def check_item_possibility(self_object, other_object, offers_so_far, potential_a
                         chosen_dict[effect.item] = item_delta
                     else:
                         chosen_dict[effect.item] = item_delta + chosen_dict[effect.item]
-    
+
     #make sure its possible to lose that many items
 
     #print(self_net_item_dict)
     #print(other_net_item_dict)
-    
+
     for item in self_net_item_dict:
         amount = self_net_item_dict[item]
-        #print(item, amount, self_inventory.get_item(item), not (amount < 0 and self_inventory.get_item(item) < -amount))
-        if amount < 0 and self_inventory.get_item(item) < -amount:
+        #print(item, amount, self_inventory.get_quantity(item), not (amount < 0 and self_inventory.get_quantity(item) < -amount))
+        if amount < 0 and self_inventory.get_quantity(item) < -amount:
             return False
-    
+
     for item in other_net_item_dict:
         amount = other_net_item_dict[item]
-        #print(item, amount, other_inventory.get_item(item), not (amount < 0 and other_inventory.get_item(item) < -amount))
-        if amount < 0 and other_inventory.get_item(item) < -amount:
+        #print(item, amount, other_inventory.get_quantity(item), not (amount < 0 and other_inventory.get_quantity(item) < -amount))
+        if amount < 0 and other_inventory.get_quantity(item) < -amount:
             return False
-    
+
     return True
 class NeighborlyNegotiator():
-    def __init__(self, name, game_object : GameObject) -> None:
+    def __init__(self, name: str, game_object : GameObject) -> None:
         self.name = name
         self.gameObject = game_object
         self.agent = Agent()
@@ -84,7 +75,7 @@ class NeighborlyNegotiator():
         self.agent.parent = self
 
     def generate_starting_possible_actions_ov(self, old_self) -> 'list[Action]':
-        possible_actions = []
+        possible_actions: List[Action] = []
         partner : NeighborlyNegotiator = self.agent.negotiation_state.get_partner(self.agent).parent
 
         #print(f'enumerating actions for {self.gameObject.get_component(GameCharacter).first_name}')
@@ -127,7 +118,7 @@ class NeighborlyNegotiator():
         prod = None
         if biz:
             prod = biz.gameobject.get_component(Produces)
-            
+
         utility = 0
 
         for role in effects_dict.keys():
@@ -135,7 +126,7 @@ class NeighborlyNegotiator():
                 continue
 
             effects = effects_dict[role]
-            
+
             for effect in effects:
                 if type(effect) in [GainItemEffect, LoseItemEffect]:
                     sign = 1 if type(effect) is GainItemEffect else -1
@@ -151,10 +142,10 @@ class NeighborlyNegotiator():
 
                     if not used_rational_util:
                         r = random.Random()
-                        r.seed(self.gameObject._id)
+                        r.seed(self.gameObject.uid)
                         utility += r.randint(0, 3) * sign
 
-                    continue     
+                    continue
 
                 elif type(effect) in [GainRelationshipEffect, LoseRelationshipEffect]:
                     sign = 1 if type(effect) is GainRelationshipEffect else -1
@@ -164,17 +155,17 @@ class NeighborlyNegotiator():
                     utility += 1 * sign
                     if effect.facet == Respect:
                         #someone gains respect for me
-                        if target == self.gameObject._id:
+                        if target == self.gameObject.uid:
                             other = self.gameObject.world.get_gameobject(owner)
                             other_biz = get_associated_business(other)
                             if other_biz and biz:
                                 other_prod = other_biz.gameobject.get_component(Produces)
                                 if True in [x in other_prod.produces for x in prod.requires]:
                                     utility += 1 * sign
-                    
+
                     #gaining favors is considered bad, losing is considered REALLY good (only if you actually owe them a Favor, in which case its bad the more Favors they owe you)
                     elif effect.facet == Favors:
-                        if target == self.gameObject._id:
+                        if target == self.gameObject.uid:
                             #having someone owe me is good enough for util of 2.. unless they already owe me then they're less reliable
                             existing_favors = effect.relationship.gameobject.get_component(Favors).favors
                             return_favors = get_relationship(target, owner).get_component(Favors).favors
@@ -183,15 +174,15 @@ class NeighborlyNegotiator():
                                 #diminishing returns on favors... if you already owe me why would I trust you'll repay the next favor?
                                 if existing_favors > 0:
                                     utility += 5 * sign
-                                
+
                                 #if I owe them then its much nicer for them to owe me back now
                                 elif return_favors > 0:
                                     utility += -2 * sign
 
                             #otherwise generally worth 2 util to be owed a brand new favor
-                            elif effect is GainRelationshipEffect: 
+                            elif effect is GainRelationshipEffect:
                                 utility += -2 * sign
-                        if owner == self.gameObject._id:
+                        if owner == self.gameObject.uid:
                             utility += -5 * sign # getting rid of a favor u owe is worth a lot & owing a favor is a pricy place to be
 
                 elif type(effect) is GainKnowledgeEffect:
@@ -199,11 +190,3 @@ class NeighborlyNegotiator():
                         utility += 2 #knowledge is power or whatever
 
         return utility * neighborly_action_priority# * (0.75 + 0.5 * self.gameObject.world.get_resource(random.Random).random())
-
-def negotiate(agent1, agent2, thing_to_ask_for):
-    result = print_negotiation_trace(agent1, agent2, thing_to_ask_for)
-    if result[0] == ResponseCategory.ACCEPT:
-        return result[1][0]
-    else:
-        return[]
-    
