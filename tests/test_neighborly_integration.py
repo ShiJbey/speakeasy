@@ -140,8 +140,63 @@ def run_sim_with_negotiation(duration, seed = 1337, enable_negotiation = True):
     print("\tExecution time: ", elapsed_time, "seconds")
     return sim
 
+def test_seed_consistency(duration = 1, seed = 1337):
+    num_to_sync = 2
+    steps_to_test = 50
+    sims = []
+    for i in range(num_to_sync):
+        sim = neighborly.Neighborly(
+        neighborly.NeighborlyConfig.parse_obj(
+            {
+                "seed": seed,
+                "enable_negotiation": True,
+                "time_increment": "1mo",
+                "relationship_schema": {
+                    "components": {
+                        "Friendship": {
+                            "min_value": -100,
+                            "max_value": 100,
+                        },
+                        "Romance": {
+                            "min_value": -100,
+                            "max_value": 100,
+                        },
+                        "InteractionScore": {
+                            "min_value": -5,
+                            "max_value": 5,
+                        },
+                        "Respect": {
+                            "min_value": -100,
+                            "max_value": 100,
+                        },
+                        "Favors": {
+                            "favors": 0
+                        }
+                    }
+                },
+                "plugins": [
+                    #"neighborly.plugins.defaults.all",
+                    "neighborly.plugins.defaults.characters",
+                    #"neighborly.plugins.defaults.businesses",
+                    "neighborly.plugins.defaults.residences",
+                    "neighborly.plugins.defaults.life_events",
+                    "neighborly.plugins.defaults.social_rules",
+                    "neighborly.plugins.defaults.location_bias_rules",
+                    "neighborly.plugins.defaults.resident_spawning",
+                    #"neighborly.plugins.defaults.settlement",
+                    "neighborly.plugins.defaults.create_town",
+                    "speakeasy.plugin"
+                ],
+            }
+        )
+        )
+        sims.append(sim)
+        
+
+
+
 if __name__ == '__main__':
-    sim = run_sim_with_negotiation(sys.argv[1] if len(sys.argv) > 1 else 15)
+    sim = run_sim_with_negotiation(int(sys.argv[1]) if len(sys.argv) > 1 else 15)
     test_supported_event_feasibility(sim)
     run_random_negotiation(sim)
     

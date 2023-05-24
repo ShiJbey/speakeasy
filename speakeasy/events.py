@@ -57,6 +57,10 @@ class GainKnowledgeEffect:
     def __init__(self, item) -> None:
         self.item = item
 
+class TriggerEventEffect:
+    def __init__(self, triggered_event_class) -> None:
+        self.triggered_event_class = triggered_event_class
+
 # utility functions
 def needs_item_from(a: Business, b: Inventory, r : random.Random):
     pro_a = a.gameobject.get_component(Produces)
@@ -105,7 +109,9 @@ class LearnAboutEvent(RandomLifeEvent):
         return 1
 
     def get_effects(self):
-        return {}
+        return {
+            Role("Initiator", self["Initiator"]) : [GainKnowledgeEffect(None)] 
+        }
 
     def execute(self) -> None:
         initiator = self["Initiator"]
@@ -367,7 +373,7 @@ class GoodWordEvent(RandomLifeEvent):
 
         return {
             Role("Initiator", initiator) : [LoseRelationshipEffect(get_relationship(initiator, subject), Favors)],#, LoseRelationshipEffect(get_relationship(other, initiator), Respect)
-            Role("Subject", subject) : [GainRelationshipEffect(get_relationship(other, subject), Respect)]
+            Role("Subject", subject) : [GainRelationshipEffect(get_relationship(other, subject), Respect), GainRelationshipEffect(get_relationship(subject, initiator), Favors)]
         }
 
     def execute(self) -> None:
@@ -1075,8 +1081,8 @@ class NegotiateEvent(RandomLifeEvent):
         other = self["Other"]
 
         return {
-            Role("Initiator", initiator) : [],
-            Role("Other", other) : []
+            Role("Initiator", initiator) : [GainRelationshipEffect(get_relationship(initiator, other)), GainRelationshipEffect(get_relationship(other, initiator))],
+            Role("Other", other) : [GainRelationshipEffect(get_relationship(initiator, other)), GainRelationshipEffect(get_relationship(other, initiator))]
         }
 
     def execute(self) -> None:    
