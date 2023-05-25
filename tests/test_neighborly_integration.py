@@ -5,7 +5,7 @@ from typing import Union
 
 import neighborly
 from neighborly.components import GameCharacter
-from neighborly.core.ecs import Active
+from neighborly.core.ecs import Active, GameObject
 from neighborly.core.roles import RoleList
 from neighborly.core.relationship import get_relationship
 from neighborly.core.life_event import AllEvents
@@ -138,11 +138,13 @@ def run_sim_with_negotiation(
                 "plugins": [
                     "neighborly.plugins.defaults.characters",
                     "neighborly.plugins.defaults.residences",
-                    "neighborly.plugins.defaults.life_events",
+                    #"neighborly.plugins.defaults.life_events",
                     "neighborly.plugins.defaults.social_rules",
                     "neighborly.plugins.defaults.location_bias_rules",
                     "neighborly.plugins.defaults.resident_spawning",
                     "neighborly.plugins.defaults.create_town",
+                    "neighborly.plugins.defaults.systems",
+                    "neighborly.plugins.defaults.names",
                     "speakeasy.plugin",
                 ],
                 "settings": {
@@ -169,6 +171,8 @@ def test_seed_consistency(duration = 1, seed = 1337):
     steps_to_test = 50
     sims = []
     for i in range(num_to_sync):
+        AllEvents.clear_event_listeners()
+        GameObject.clear_event_listeners()
         sim = neighborly.Neighborly(
         neighborly.NeighborlyConfig.parse_obj(
             {
@@ -202,11 +206,11 @@ def test_seed_consistency(duration = 1, seed = 1337):
                     "neighborly.plugins.defaults.create_town",
                     "neighborly.plugins.defaults.characters",
                     "neighborly.plugins.defaults.residences",
-                    "neighborly.plugins.defaults.life_events",
+                    #"neighborly.plugins.defaults.life_events",
                     "neighborly.plugins.defaults.social_rules",
                     "neighborly.plugins.defaults.location_bias_rules",
                     "neighborly.plugins.defaults.resident_spawning",
-                    "neighborly.plugins.defaults.systems",
+                    #"neighborly.plugins.defaults.systems",
                     "neighborly.plugins.defaults.names",
                     "speakeasy.plugin"
                 ],

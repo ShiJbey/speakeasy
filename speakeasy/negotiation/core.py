@@ -1,5 +1,5 @@
 from enum import Enum
-import random
+import random, io
 
 class ResponseCategory(Enum):
   ACCEPT = 0,
@@ -129,6 +129,16 @@ class Agent:
   def take_turn(self, negotiation_state):
     pass
 
+  import io
+
+def print_and_save_to_string(*args, **kwargs):
+    print(*args, **kwargs)
+    output = io.StringIO()
+    print(*args, file=output, **kwargs)
+    contents = output.getvalue()
+    output.close()
+    return contents
+
 class NegotiationState:
   def __init__(self, a1, a2, ask):
     self.agent1 = a1
@@ -173,18 +183,20 @@ def print_negotiation_trace(agent1 : Agent, agent2 : Agent, initialAsk):
 		#Negotiation Protocol
     state.setup_initial_ask(initialAsk)
 
-    print("Negotiation Begins")
-    print("==================")
-    print(f"Agent 1 opens by asking Agent 2 for {offers_to_string(state.currentOffers)}. ", end =" ")
+    trace_string = ""
+
+    trace_string += print_and_save_to_string("Negotiation Begins")
+    trace_string += print_and_save_to_string("==================")
+    trace_string += print_and_save_to_string(f"Agent 1 opens by asking Agent 2 for {offers_to_string(state.currentOffers)}. ", end =" ")
 
     actionsDiscussed = []
 
     while state.lastResult == ResponseCategory.COUNTER:
       for offer in state.currentOffers:
-        print(f"[{agent1.evaluate_offer(offer)}:{agent2.evaluate_offer(offer)}] ", end =" ")
+        trace_string += print_and_save_to_string(f"[{agent1.evaluate_offer(offer)}:{agent2.evaluate_offer(offer)}] ", end =" ")
         actionsDiscussed += offer
 
-      print()
+      trace_string += print_and_save_to_string()
 
       state.currentAgent = agent1 if state.currentAgentIndex == 1 else agent2
       counterOffers = []
@@ -196,28 +208,28 @@ def print_negotiation_trace(agent1 : Agent, agent2 : Agent, initialAsk):
       state.rejectedOffers += state.currentOffers
 
       if state.lastResult == ResponseCategory.COUNTER:
-        print(f"Agent {state.currentAgentIndex} counters with {offers_to_string(counterOffers)}. ", end = ' ')
+        trace_string += print_and_save_to_string(f"Agent {state.currentAgentIndex} counters with {offers_to_string(counterOffers)}. ", end = ' ')
         state.currentOffers = counterOffers
       elif state.lastResult == ResponseCategory.ACCEPT:
-        print(f"Agent {state.currentAgentIndex} accepts {offers_to_string(counterOffers)}. ", end = ' ')
+        trace_string += print_and_save_to_string(f"Agent {state.currentAgentIndex} accepts {offers_to_string(counterOffers)}. ", end = ' ')
         state.currentOffers = counterOffers
 
         for offer in state.currentOffers:
-          print(f"[{agent1.evaluate_offer(offer)}:{agent2.evaluate_offer(offer)}] ")
+          trace_string += print_and_save_to_string(f"[{agent1.evaluate_offer(offer)}:{agent2.evaluate_offer(offer)}] ")
 
       elif state.lastResult == ResponseCategory.REJECT:
-        print(f"Agent {state.currentAgentIndex} rejects. ")
+        trace_string += print_and_save_to_string(f"Agent {state.currentAgentIndex} rejects. ")
 
       state.currentAgentIndex = 2 if state.currentAgentIndex == 1 else 1
 
-    print("==================")
+    trace_string += print_and_save_to_string("==================")
 
     for a in actionsDiscussed:
-      print(f"[{a.val} => {agent1.evaluate_action(a)}:{agent2.evaluate_action(a)}]")
+      trace_string += print_and_save_to_string(f"[{a.val} => {agent1.evaluate_action(a)}:{agent2.evaluate_action(a)}]")
 
     agent1.negotiation_state = state
     agent2.negotiation_state = state
-    return (state.lastResult, state.currentOffers)
+    return ((state.lastResult, state.currentOffers), trace_string)
 
 if __name__ == "__main__":
   agent1 = Agent()
@@ -225,8 +237,8 @@ if __name__ == "__main__":
   print_negotiation_trace(agent1, agent2, agent1.ActionToAskFor)
 
 def negotiate(agent1, agent2, thing_to_ask_for):
-    result = print_negotiation_trace(agent1, agent2, thing_to_ask_for)
+    result, trace_string = print_negotiation_trace(agent1, agent2, thing_to_ask_for)
     if result[0] == ResponseCategory.ACCEPT:
-        return result[1][0]
+        return result[1][0], trace_string
     else:
-        return[]
+        return [], trace_string

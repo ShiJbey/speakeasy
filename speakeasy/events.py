@@ -19,6 +19,7 @@ from neighborly.core.relationship import (
     get_relationship,
     get_relationships_with_statuses
 )
+from neighborly.components.character import Family
 from neighborly.decorators import random_life_event
 
 from speakeasy.negotiation.core import NegotiationState, print_negotiation_trace, ResponseCategory
@@ -123,6 +124,7 @@ class LearnAboutEvent(RandomLifeEvent):
         others_biz = get_associated_business(other)
         others_items = list(others_biz.gameobject.get_component(Produces).produces.keys())
         initiators_knowledge.add_producer(others_biz.gameobject.uid, others_items[0])
+        initiator.world.get_resource(AllEvents).append(self)
 
     @staticmethod
     def _bind_initiator(
@@ -218,11 +220,12 @@ class TradeEvent(RandomLifeEvent):
         others_inventory.add_item(initiators_item, 1)
 
         #add some mutual respect
-        get_relationship(initiator, other).get_component(Respect).increment(1)#.get_component(Relationship).add_modifier(RelationshipModifier('Gained respect due to trade.', {Respect:1}))
-        get_relationship(other, initiator).get_component(Respect).increment(1)#.add_modifier(RelationshipModifier('Gained respect due to trade.', {Respect:1}))
+        get_relationship(initiator, other).get_component(Respect).increment(1)
+        get_relationship(other, initiator).get_component(Respect).increment(1)
 
         if event_history := initiator.try_component(EventHistory):
             event_history.append(self)
+        initiator.world.get_resource(AllEvents).append(self)
 
     @staticmethod
     def _bind_initiator(
@@ -387,7 +390,7 @@ class GoodWordEvent(RandomLifeEvent):
         #print(f"Prior, SUB now owes INIT: {favors_sub_owes_init_DISCOURAGING} + 1, and INIT ALREADY OWED SUB {favors_init_owed_sub_ENCOURAGING} (-1)?")
 
         #add some respect
-        get_relationship(other, subject).get_component(Respect).increment(1)#add_modifier(RelationshipModifier('Gained respect due to good word.', {Respect:1}))
+        get_relationship(other, subject).get_component(Respect).increment(1)
 
         #remove some favor, or add if there wasn't a favor owed.
         if (favors_init_owed_sub_ENCOURAGING > 0):
@@ -402,6 +405,7 @@ class GoodWordEvent(RandomLifeEvent):
 
         if event_history := initiator.try_component(EventHistory):
             event_history.append(self)
+        initiator.world.get_resource(AllEvents).append(self)
 
     @staticmethod
     def _bind_initiator(
@@ -562,10 +566,11 @@ class TellAboutEvent(RandomLifeEvent):
         #other.get_component(Knowledge).produces[subjects_item].append(subjects_business)
 
         #add some respect
-        get_relationship(initiator, subject).get_component(Respect).increment(1)#.add_modifier(RelationshipModifier('Gained respect due to getting information.', {Respect:1}))
+        get_relationship(initiator, subject).get_component(Respect).increment(1)
 
         if event_history := initiator.try_component(EventHistory):
             event_history.append(self)
+        initiator.world.get_resource(AllEvents).append(self)
 
     @staticmethod
     def _bind_initiator(
@@ -706,7 +711,7 @@ class TheftEvent(RandomLifeEvent):
 
         #move item between inventories
         initiators_inventory = initiator.get_component(Inventory)
-        others_owner = initiator.world.get_gameobject(other.owner)
+        others_owner = initiator.world.get_gameobject(other.get_component(Business).owner)
         others_inventory = others_owner.get_component(Inventory)
 
         for stolen_item_idx in range(initiator.world.get_resource(random.Random).randint(1,5)):
@@ -718,10 +723,11 @@ class TheftEvent(RandomLifeEvent):
             initiators_inventory.add_item(others_item, 1)
 
             #lose some respect
-            get_relationship(others_owner, initiator).get_component(Respect).increment(-3)#.add_modifier(RelationshipModifier('Lost respect due to theft.', {Respect:-3}))
+            get_relationship(others_owner, initiator).get_component(Respect).increment(-3)
 
         if event_history := initiator.try_component(EventHistory):
             event_history.append(self)
+        initiator.world.get_resource(AllEvents).append(self)
 
     @staticmethod
     def _bind_initiator(
@@ -758,7 +764,7 @@ class TheftEvent(RandomLifeEvent):
 
             if True in [r.get_component(Respect).get_value() < THEFT_EVENT_RESPECT_THRESHOLD for r in known_business_relationships]:
                 victim = world.get_resource(random.Random).choice([get_associated_business(world.get_gameobject(r.get_component(Relationship).target)) for r in known_business_relationships if r.get_component(Respect).get_value() < THEFT_EVENT_RESPECT_THRESHOLD])
-                matches.append((candidate, victim))
+                matches.append((candidate, victim.gameobject))
                 #print('chose a victim and candidate.')
 
         if matches:
@@ -773,17 +779,16 @@ class TheftEvent(RandomLifeEvent):
         bindings: RoleList,
     ) -> Optional[RandomLifeEvent]:
 
-        #print("attempting theft..")
         initiator_tup = cls._bind_initiator(world, bindings.get("Initiator"))
 
         if initiator_tup is None:
-            #print("theft failed on initiator")
+            print("theft failed on initiator")
             return None
 
         initiator, other = initiator_tup
 
         if other is None:
-            #print("theft failed on other")
+            print("theft failed on other")
             return None
 
         return cls(world.get_resource(SimDateTime), initiator, other)
@@ -804,7 +809,7 @@ class GiveEvent(RandomLifeEvent):
         self, date: SimDateTime, initiator: GameObject, other: GameObject, item: str
     ) -> None:
         self.item = item
-        super().__init__(date, [Role("Initiator", initiator), Role("Other", other), Role(f"Item: {item}", None)])
+        super().__init__(date, [Role("Initiator", initiator), Role("Other", other)])
 
     def get_priority(self) -> float:
         return 1
@@ -831,6 +836,8 @@ class GiveEvent(RandomLifeEvent):
 
         initiators_inventory.remove_item(self.item, 1)
         others_inventory.add_item(self.item, 1)
+
+        initiator.world.get_resource(AllEvents).append(self)
 
 
     @staticmethod
@@ -879,19 +886,16 @@ class GiveEvent(RandomLifeEvent):
         initiator = cls._bind_initiator(world, bindings.get("Initiator"))
 
         if initiator is None:
-            #print("give failed on initiator")
             return None
 
         other = cls._bind_other(world, initiator, bindings.get("Other"))
 
         if other is None:
-            #print("give failed on other")
             return None
 
         item = cls._bind_item(world, initiator, other)
 
         if item is None:
-            #print("give failed on item")
             return None
 
         return cls(world.get_resource(SimDateTime), initiator, other, item)
@@ -924,14 +928,18 @@ class HelpWithRivalGangEvent(RandomLifeEvent):
         initiator = self["Initiator"]
         other = self["Other"]
 
-        #add some respect
-        get_relationship(other, initiator).get_component(Respect).increment(1) #.add_modifier(RelationshipModifier('Gained respect due to help witha  rival gang.', {Respect:1}))
+        #add some respect from other and their fam
+        get_relationship(other, initiator).get_component(Respect).increment(2) 
+        others_fam = [obj.get_component(Relationship).target for obj in get_relationships_with_statuses(other, Family)]
+        for fam in others_fam:
+            get_relationship(initiator.world.get_gameobject(fam), initiator).get_component(Respect).increment(1) 
 
-        #add a favor
-        get_relationship(other, initiator).get_component(Favors).favors += 1#.add_modifier(RelationshipModifier('Owe a Favors due to getting help with a rival gang.', {Favors:1}))
+        #add a favor from other
+        get_relationship(other, initiator).get_component(Favors).favors += 1
 
         if event_history := initiator.try_component(EventHistory):
             event_history.append(self)
+        initiator.world.get_resource(AllEvents).append(self)
 
     @staticmethod
     def _bind_initiator(
@@ -1018,6 +1026,7 @@ class GenerateKnowledgeEvent(RandomLifeEvent):
         learning_event = LearnAboutEvent(initiator.world.get_resource(SimDateTime), initiator, initiator)
         initiator.world.get_resource(AllEvents).append(learning_event)
         learning_event.execute()
+        initiator.world.get_resource(AllEvents).append(self)
 
     @staticmethod
     def _bind_initiator(
@@ -1060,7 +1069,7 @@ class GenerateKnowledgeEvent(RandomLifeEvent):
 
 @random_life_event()
 class NegotiateEvent(RandomLifeEvent):
-    from speakeasy.negotiation.core import get_initial_ask_options, NegotiationState
+    from speakeasy.negotiation.core import get_initial_ask_options, negotiate
     from speakeasy.negotiation.neighborly_classes import NeighborlyNegotiator
 
     initiator = "Initiator"
@@ -1069,6 +1078,7 @@ class NegotiateEvent(RandomLifeEvent):
         self, date: SimDateTime, initiator: GameObject, other: GameObject
     ) -> None:
         super().__init__(date, [Role("Initiator", initiator), Role("Other", other)])
+        self.trace = ""
 
     def get_priority(self) -> float:
         return 1
@@ -1094,13 +1104,12 @@ class NegotiateEvent(RandomLifeEvent):
         partner = NegotiateEvent.NeighborlyNegotiator( other.get_component(GameCharacter).full_name, other, initiator.world.get_resource(random.Random) )
         options = NegotiateEvent.get_initial_ask_options(negotiator, partner)
         if len(options) < 1:
-            #print("Nothing to ask for.")
             return
         thing_to_ask_for = initiator.world.get_resource(random.Random).choice(options)
 
         print(f'Running negotiation between {negotiator.name} and {partner.name}:')
         print(f'{negotiator.name}:{negotiator.gameObject.get_component(Inventory).items}\n{partner.name}:{partner.gameObject.get_component(Inventory).items}')
-        agreement = NegotiateEvent.negotiate(negotiator, partner, thing_to_ask_for)
+        agreement, self.trace = NegotiateEvent.negotiate(negotiator, partner, thing_to_ask_for)
 
         #trigger each event from the agreed upon package
         for item in agreement:
@@ -1109,16 +1118,17 @@ class NegotiateEvent(RandomLifeEvent):
             triggered_event.execute()
 
             #add some mutual respect
-            get_relationship(initiator, other).get_component(Respect).increment(1)#add_modifier(RelationshipModifier('Gained respect due to successful negotiation.', {Respect:1}))
-            get_relationship(other, initiator).get_component(Respect).increment(1)#add_modifier(RelationshipModifier('Gained respect due to successful negotiation.', {Respect:1}))
+            get_relationship(initiator, other).get_component(Respect).increment(1)
+            get_relationship(other, initiator).get_component(Respect).increment(1)
 
         if len(agreement) == 0:
             #lose some mutual respect
-            get_relationship(initiator, other).get_component(Respect).increment(-1)#add_modifier(RelationshipModifier('Lost respect due to failed negotiation.', {Respect:-1}))
-            get_relationship(other, initiator).get_component(Respect).increment(-1)#add_modifier(RelationshipModifier('Lost respect due to failed negotiation.', {Respect:-1}))
+            get_relationship(initiator, other).get_component(Respect).increment(-1)
+            get_relationship(other, initiator).get_component(Respect).increment(-1)
 
         if event_history := initiator.try_component(EventHistory):
             event_history.append(self)
+        initiator.world.get_resource(AllEvents).append(self)
 
     @staticmethod
     def _bind_initiator(
@@ -1209,4 +1219,4 @@ class NegotiateEvent(RandomLifeEvent):
         return cls(world.get_resource(SimDateTime), initiator, other)
 
     def __str__(self) -> str:
-        return f"{super().__str__()}"
+        return f"{super().__str__()} + {self.trace}"
