@@ -27,7 +27,7 @@ from speakeasy.negotiation.core import NegotiationState, print_negotiation_trace
 ############
 # TODO: remove placeholders for new stuff
 TRADE_EVENT_RESPECT_THRESHOLD = 5
-GOOD_WORD_EVENT_RESPECT_THRESHOLD = 6
+GOOD_WORD_EVENT_RESPECT_THRESHOLD = 5
 TELL_ABOUT_EVENT_RESPECT_THRESHOLD = 10
 THEFT_EVENT_RESPECT_THRESHOLD = -4
 HELP_EVENT_RESPECT_THRESHOLD = 12
@@ -422,11 +422,11 @@ class GoodWordEvent(RandomLifeEvent):
         #initiator must respect someone... who respects them
         matches = []
         for character in candidates:
-            people_they_respect = [world.get_gameobject(r).get_component(Relationship).target for r in character.get_component(RelationshipManager).outgoing.values() if world.get_gameobject(r).get_component(Respect).get_value() > GOOD_WORD_EVENT_RESPECT_THRESHOLD]
+            people_they_respect = [world.get_gameobject(r).get_component(Relationship).target for r in character.get_component(RelationshipManager).outgoing.values() if world.get_gameobject(r).get_component(Respect).get_value() >= GOOD_WORD_EVENT_RESPECT_THRESHOLD]
             if len(people_they_respect) < 1:
                 continue
 
-            people_mutually_respected = [world.get_gameobject(target) for target in people_they_respect if get_relationship(world.get_gameobject(target), character).get_component(Respect).get_value() > GOOD_WORD_EVENT_RESPECT_THRESHOLD]
+            people_mutually_respected = [world.get_gameobject(target) for target in people_they_respect if get_relationship(world.get_gameobject(target), character).get_component(Respect).get_value() >= GOOD_WORD_EVENT_RESPECT_THRESHOLD]
 
             if len(people_mutually_respected) < 1:
                 continue
@@ -782,13 +782,13 @@ class TheftEvent(RandomLifeEvent):
         initiator_tup = cls._bind_initiator(world, bindings.get("Initiator"))
 
         if initiator_tup is None:
-            print("theft failed on initiator")
+            #print("theft failed on initiator")
             return None
 
         initiator, other = initiator_tup
 
         if other is None:
-            print("theft failed on other")
+            #print("theft failed on other")
             return None
 
         return cls(world.get_resource(SimDateTime), initiator, other)
@@ -1091,8 +1091,8 @@ class NegotiateEvent(RandomLifeEvent):
         other = self["Other"]
 
         return {
-            Role("Initiator", initiator) : [GainRelationshipEffect(get_relationship(initiator, other)), GainRelationshipEffect(get_relationship(other, initiator))],
-            Role("Other", other) : [GainRelationshipEffect(get_relationship(initiator, other)), GainRelationshipEffect(get_relationship(other, initiator))]
+            Role("Initiator", initiator) : [GainRelationshipEffect(get_relationship(initiator, other), Respect), GainRelationshipEffect(get_relationship(other, initiator), Respect)],
+            Role("Other", other) : [GainRelationshipEffect(get_relationship(initiator, other), Respect), GainRelationshipEffect(get_relationship(other, initiator), Respect)]
         }
 
     def execute(self) -> None:
