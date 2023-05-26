@@ -746,25 +746,25 @@ class TheftEvent(RandomLifeEvent):
         #initiator must disrespect someonethey know
         for candidate in candidates:
 
-            known_businesses = [world.get_gameobject(i) for i in candidate.get_component(Knowledge).known_producers()]
+            known_businesses = [world.get_gameobject(i) for i in candidate.get_component(Knowledge).known_producers() if world.get_gameobject(i).has_component(Active) and world.get_gameobject(i).get_component(Business).owner]
             #print(f"I know {len(known_businesses)} biz's")
 
-            known_business_associates = [world.get_gameobject(i.get_component(Business).owner) for i in known_businesses if i.get_component(Business).owner]
+            known_business_associates = [(world.get_gameobject(i.get_component(Business).owner),i) for i in known_businesses if i.get_component(Business).owner]
             #print(f"It has {len(known_business_associates)} owners")
-            known_business_employees = [[world.get_gameobject(emp) for emp in biz_object.get_component(Business).get_employees()] for biz_object in known_businesses if biz_object.get_component(Business).get_employees()]
+            known_business_employees = [[(world.get_gameobject(emp), biz_object) for emp in biz_object.get_component(Business).get_employees()] for biz_object in known_businesses if biz_object.get_component(Business).get_employees()]
             #print(f"It has {len(known_business_employees)} employees")
 
             for emps in known_business_employees:
                 known_business_associates.extend(emps)
 
-            known_business_relationships = [get_relationship(candidate, o) for o in known_business_associates]
+            known_business_relationships = [(get_relationship(candidate, pair[0]), pair[1]) for pair in known_business_associates]
             #print("My relatioships with them: ", [r.get_component(Respect).get_value() for r in known_business_relationships])
 
             #print("ALL my relationships: ", [candidate.world.get_gameobject(r_id).get_component(Respect).get_value() for r_id in candidate.get_component(RelationshipManager).outgoing.values()])
 
-            if True in [r.get_component(Respect).get_value() < THEFT_EVENT_RESPECT_THRESHOLD for r in known_business_relationships]:
-                victim = world.get_resource(random.Random).choice([get_associated_business(world.get_gameobject(r.get_component(Relationship).target)) for r in known_business_relationships if r.get_component(Respect).get_value() < THEFT_EVENT_RESPECT_THRESHOLD])
-                matches.append((candidate, victim.gameobject))
+            if True in [pair[0].get_component(Respect).get_value() < THEFT_EVENT_RESPECT_THRESHOLD for pair in known_business_relationships]:
+                victim = world.get_resource(random.Random).choice([pair[1] for pair in known_business_relationships if pair[0].get_component(Respect).get_value() < THEFT_EVENT_RESPECT_THRESHOLD])
+                matches.append((candidate, victim))
                 #print('chose a victim and candidate.')
 
         if matches:
@@ -899,6 +899,9 @@ class GiveEvent(RandomLifeEvent):
             return None
 
         return cls(world.get_resource(SimDateTime), initiator, other, item)
+    
+    def __str__(self) -> str:
+        return f"{super().__str__()}, Item: {self.item}"
 
 @random_life_event()
 class HelpWithRivalGangEvent(RandomLifeEvent):
@@ -1079,6 +1082,7 @@ class NegotiateEvent(RandomLifeEvent):
     ) -> None:
         super().__init__(date, [Role("Initiator", initiator), Role("Other", other)])
         self.trace = ""
+        self.agreement = []
 
     def get_priority(self) -> float:
         return 1
@@ -1109,10 +1113,10 @@ class NegotiateEvent(RandomLifeEvent):
 
         print(f'Running negotiation between {negotiator.name} and {partner.name}:')
         print(f'{negotiator.name}:{negotiator.gameObject.get_component(Inventory).items}\n{partner.name}:{partner.gameObject.get_component(Inventory).items}')
-        agreement, self.trace = NegotiateEvent.negotiate(negotiator, partner, thing_to_ask_for)
+        self.agreement, self.trace = NegotiateEvent.negotiate(negotiator, partner, thing_to_ask_for)
 
         #trigger each event from the agreed upon package
-        for item in agreement:
+        for item in self.agreement:
             triggered_event = item.val
             initiator.world.get_resource(AllEvents).append(triggered_event)
             triggered_event.execute()
@@ -1121,7 +1125,7 @@ class NegotiateEvent(RandomLifeEvent):
             get_relationship(initiator, other).get_component(Respect).increment(1)
             get_relationship(other, initiator).get_component(Respect).increment(1)
 
-        if len(agreement) == 0:
+        if len(self.agreement) == 0:
             #lose some mutual respect
             get_relationship(initiator, other).get_component(Respect).increment(-1)
             get_relationship(other, initiator).get_component(Respect).increment(-1)
