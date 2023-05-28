@@ -149,13 +149,14 @@ class NeighborlyNegotiator(Agent):
                     sign = 1 if type(effect) is GainRelationshipEffect else -1
                     target = effect.relationship.get_component(Relationship).target
                     owner = effect.relationship.get_component(Relationship).owner
+                    target_obj = self.gameObject.world.get_gameobject(target)
+                    owner_obj = self.gameObject.world.get_gameobject(owner)
 
                     utility += 1 * sign
                     if effect.facet == Respect:
                         #someone gains respect for me
                         if target == self.gameObject.uid:
-                            other = self.gameObject.world.get_gameobject(owner)
-                            other_biz = get_associated_business(other)
+                            other_biz = get_associated_business(owner_obj)
                             if other_biz and biz:
                                 other_prod = other_biz.gameobject.get_component(Produces)
                                 if True in [x in other_prod.produces for x in prod.requires]:
@@ -163,28 +164,36 @@ class NeighborlyNegotiator(Agent):
 
                     #gaining favors is considered bad, losing is considered REALLY good (only if you actually owe them a Favor, in which case its bad the more Favors they owe you)
                     elif effect.facet == Favors:
-                        if target == self.gameObject.uid:
-                            #having someone owe me is good enough for util of 2.. unless they already owe me then they're less reliable
-                            existing_favors = effect.relationship.gameobject.get_component(Favors).favors
-                            return_favors = get_relationship(target, owner).get_component(Favors).favors
+                        i_own_the_debt = owner == self.gameObject.uid
 
-                            if sign < 0:
-                                #diminishing returns on favors... if you already owe me why would I trust you'll repay the next favor?
-                                if existing_favors > 0:
-                                    utility += 5 * sign
+                        if i_own_the_debt:
+                            favors_they_owe_me = effect.relationship.get_component(Favors).favors
+                            favors_i_owe_them = get_relationship(target_obj, owner_obj).get_component(Favors).favors
 
-                                #if I owe them then its much nicer for them to owe me back now
-                                elif return_favors > 0:
-                                    utility += -2 * sign
+                            #me no longer owing a favor is usually good
+                            if type(effect) is LoseRelationshipEffect:
+                                utility += 5*(favors_i_owe_them > 0) - favors_they_owe_me * 2
+                            
+                            #me owing a favor is increasingly bad
+                            if type(effect) is GainRelationshipEffect:
+                                utility -= favors_i_owe_them * 2
 
-                            #otherwise generally worth 2 util to be owed a brand new favor
-                            elif effect is GainRelationshipEffect:
-                                utility += -2 * sign
-                        if owner == self.gameObject.uid:
-                            utility += -5 * sign # getting rid of a favor u owe is worth a lot & owing a favor is a pricy place to be
+                        else:
+                            favors_i_owe_them = effect.relationship.get_component(Favors).favors
+                            favors_they_owe_me = get_relationship(target_obj, owner_obj).get_component(Favors).favors
+
+                            #them no longer owing me a favor is fine
+                            if type(effect) is LoseRelationshipEffect:
+                                pass
+
+                            #them owing me a favor is nice, unless they already do
+                            if type(effect) is GainRelationshipEffect:
+                                utility += 1 - favors_they_owe_me
+
+                        #print(f"GoodWord: {utility}, I-own:{i_own_the_debt}, favors-i-owe:{favors_i_owe_them}, favors-they-owe:{favors_they_owe_me}")
 
                 elif type(effect) is GainKnowledgeEffect:
                     if biz and effect.item in prod.requires:
                         utility += 2 #knowledge is power or whatever
-
+            
         return utility * neighborly_action_priority

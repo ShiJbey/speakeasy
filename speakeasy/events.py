@@ -411,8 +411,11 @@ class GoodWordEvent(RandomLifeEvent):
     def _bind_initiator(
         world: World, candidate: Optional[GameObject] = None
     ) -> Optional[GameObject]:
+        apply_threshold = True
+
         if candidate:
             candidates = [candidate]
+            apply_threshold = False
         else:
             candidates = [
                 world.get_gameobject(result[0])
@@ -422,12 +425,17 @@ class GoodWordEvent(RandomLifeEvent):
         #initiator must respect someone... who respects them
         matches = []
         for character in candidates:
-            people_they_respect = [world.get_gameobject(r).get_component(Relationship).target for r in character.get_component(RelationshipManager).outgoing.values() if world.get_gameobject(r).get_component(Respect).get_value() >= GOOD_WORD_EVENT_RESPECT_THRESHOLD]
+            people_they_respect = [world.get_gameobject(r).get_component(Relationship).target for r in character.get_component(RelationshipManager).outgoing.values() 
+                                        if (world.get_gameobject(r).get_component(Respect).get_value() >= GOOD_WORD_EVENT_RESPECT_THRESHOLD
+                                        or not apply_threshold)
+                                    ]
             if len(people_they_respect) < 1:
                 continue
 
-            people_mutually_respected = [world.get_gameobject(target) for target in people_they_respect if get_relationship(world.get_gameobject(target), character).get_component(Respect).get_value() >= GOOD_WORD_EVENT_RESPECT_THRESHOLD]
-
+            people_mutually_respected = [world.get_gameobject(target) for target in people_they_respect 
+                                            if (get_relationship(world.get_gameobject(target), character).get_component(Respect).get_value() >= GOOD_WORD_EVENT_RESPECT_THRESHOLD
+                                            or not apply_threshold)
+                                        ]
             if len(people_mutually_respected) < 1:
                 continue
 
@@ -444,9 +452,11 @@ class GoodWordEvent(RandomLifeEvent):
     ) -> Optional[GameObject]:
 
         respect_threshold = GOOD_WORD_EVENT_RESPECT_THRESHOLD
+        apply_threshold = True
 
         if candidate:
             candidates = [candidate]
+            apply_threshold = False
         else:
             candidates = [
                 world.get_gameobject(c)
@@ -458,7 +468,7 @@ class GoodWordEvent(RandomLifeEvent):
         for character in candidates:
             #prereq: initiator must respect subject
             respect = get_relationship(initiator, character).get_component(Respect)
-            if respect.get_value() >= respect_threshold:
+            if respect.get_value() >= respect_threshold or not apply_threshold:
                 matches.append(character)
 
         if matches:
