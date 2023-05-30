@@ -1233,4 +1233,4 @@ class NegotiateEvent(RandomLifeEvent):
         return cls(world.get_resource(SimDateTime), initiator, other)
 
     def __str__(self) -> str:
-        return f"{super().__str__()} + {self.trace}"
+        return f"{super().__str__()}"
